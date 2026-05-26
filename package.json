@@ -1,0 +1,90 @@
+{
+  "name": "@shayc/react-built-in-ai",
+  "version": "0.1.0",
+  "description": "React hooks for the browser Built-in AI APIs (Translator, Rewriter, Proofreader).",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build && npm run pack:check",
+    "pack:check": "publint --strict && attw --pack --profile esm-only",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "npm run build && changeset publish"
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "packageManager": "npm@11.0.0",
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "@types/dom-chromium-ai": "*"
+  },
+  "peerDependenciesMeta": {
+    "@types/dom-chromium-ai": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.0",
+    "@changesets/cli": "^2.28.0",
+    "@eslint/js": "^10.0.1",
+    "@types/dom-chromium-ai": "^0.0.16",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "@vitest/browser-playwright": "^4.1.7",
+    "eslint": "^10.4.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.6.0",
+    "prettier": "^3.8.3",
+    "publint": "^0.3.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "tsdown": "^0.22.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.60.0",
+    "vitest": "^4.1.7",
+    "vitest-browser-react": "^2.2.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shayc/react-built-in-ai.git"
+  },
+  "homepage": "https://github.com/shayc/react-built-in-ai#readme",
+  "bugs": "https://github.com/shayc/react-built-in-ai/issues",
+  "license": "MIT",
+  "keywords": [
+    "react",
+    "hooks",
+    "ai",
+    "translator",
+    "rewriter",
+    "proofreader",
+    "gemini-nano",
+    "chrome",
+    "built-in-ai"
+  ]
+}
