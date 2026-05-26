@@ -66,8 +66,7 @@
     "vitest-browser-react": "^2.2.0"
   },
   "publishConfig": {
-    "access": "public",
-    "provenance": true
+    "access": "public"
   },
   "overrides": {
     "fflate": "0.8.2"
