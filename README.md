@@ -8,14 +8,6 @@ A thin React layer over the browser's [Built-in AI](https://developer.chrome.com
 npm install @shayc/react-built-in-ai
 ```
 
-TypeScript consumers should also install the ambient types for the underlying browser APIs:
-
-```bash
-npm install -D @types/dom-chromium-ai
-```
-
-`@types/*` packages auto-load in TypeScript, so installing it is usually enough. If your `tsconfig.json` sets a restricted `"types": [...]` array, add `"dom-chromium-ai"` to it.
-
 Requires React 18 or 19, and a Chromium-based browser that exposes the Built-in AI globals (Chrome 138+).
 
 ## Quick start

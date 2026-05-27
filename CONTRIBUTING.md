@@ -4,7 +4,7 @@ Thanks for your interest in contributing to `@shayc/react-built-in-ai`.
 
 ## Development
 
-Requires Node 20.19+ and npm 11+.
+Requires Node 24+.
 
 ```bash
 npm install

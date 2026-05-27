@@ -31,22 +31,18 @@
     "release": "npm run build && changeset publish"
   },
   "engines": {
-    "node": ">=20.19"
+    "node": ">=24"
+  },
+  "dependencies": {
+    "@types/dom-chromium-ai": "^0.0.16"
   },
   "peerDependencies": {
-    "react": "^18.0.0 || ^19.0.0",
-    "@types/dom-chromium-ai": "*"
-  },
-  "peerDependenciesMeta": {
-    "@types/dom-chromium-ai": {
-      "optional": true
-    }
+    "react": "^18.0.0 || ^19.0.0"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.2",
     "@changesets/cli": "^2.31.0",
     "@eslint/js": "^10.0.1",
-    "@types/dom-chromium-ai": "^0.0.16",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@vitest/browser-playwright": "^4.1.7",
