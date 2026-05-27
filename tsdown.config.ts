@@ -3,9 +3,11 @@ import { defineConfig } from "tsdown";
 export default defineConfig({
   entry: ["./src/index.ts"],
   format: ["esm"],
-  deps: { neverBundle: ["react", "react/jsx-runtime"] },
   dts: true,
+  banner: {
+    dts: '/// <reference types="dom-chromium-ai" />\n/// <reference lib="esnext.disposable" />\n',
+  },
   sourcemap: true,
-  target: "es2024",
+  target: "es2025",
   clean: true,
 });
