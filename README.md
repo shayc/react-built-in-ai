@@ -145,4 +145,4 @@ A per-call `signal` cancels the _caller's_ wait and the underlying action call, 
 
 ## License
 
-MIT
+[MIT](LICENSE) © Shay Cojocaru
