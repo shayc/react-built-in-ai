@@ -49,7 +49,7 @@
     "release": "changeset publish"
   },
   "engines": {
-    "node": ">=24"
+    "node": ">=22"
   },
   "dependencies": {
     "@types/dom-chromium-ai": "^0.0.16"
