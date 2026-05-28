@@ -3,7 +3,13 @@
  *
  * @see https://developer.chrome.com/docs/ai/built-in
  */
-export type BuiltInAIName = "Translator" | "Rewriter" | "Proofreader";
+export type BuiltInAIName =
+  | "Translator"
+  | "Rewriter"
+  | "Proofreader"
+  | "Summarizer"
+  | "Writer"
+  | "LanguageDetector";
 
 /**
  * Feature-detects a built-in AI namespace. A `true` result means the global
