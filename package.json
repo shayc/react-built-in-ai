@@ -1,6 +1,6 @@
 {
   "name": "@shayc/react-built-in-ai",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "React hooks for the browser Built-in AI APIs (Translator, Rewriter, Proofreader).",
   "license": "MIT",
   "author": "Shay Cojocaru <shayc@outlook.com>",

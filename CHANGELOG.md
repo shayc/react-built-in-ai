@@ -1,5 +1,11 @@
 # @shayc/react-built-in-ai
 
+## 0.2.2
+
+### Patch Changes
+
+- 082f9cd: Docs: overhaul README structure and badges, and clarify the imperative creators' error contract (typed `BuiltInAIError` lifecycle errors vs. browser rejections that pass through unchanged).
+
 ## 0.2.1
 
 ### Patch Changes
