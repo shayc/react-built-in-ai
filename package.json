@@ -31,8 +31,6 @@
   "types": "./dist/index.d.mts",
   "files": [
     "dist",
-    "README.md",
-    "LICENSE",
     "CHANGELOG.md"
   ],
   "scripts": {
@@ -42,7 +40,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc",
     "prepublishOnly": "npm run build",
     "changeset": "changeset",
     "version": "changeset version",
