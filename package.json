@@ -29,7 +29,7 @@
     "pack:check": "publint --strict && attw --pack --profile esm-only",
     "changeset": "changeset",
     "version": "changeset version",
-    "release": "npm run build && changeset publish"
+    "release": "changeset publish"
   },
   "engines": {
     "node": ">=24"
