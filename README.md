@@ -59,13 +59,13 @@ Every hook shares the lifecycle surface plus task-specific methods (`translate`,
 
 ## Requirements
 
-| Requirement   | Version                                                                     |
-| ------------- | --------------------------------------------------------------------------- |
-| React         | 18.x or 19.x (peer dependency)                                              |
-| Browser       | Chromium-based with Built-in AI globals — Chrome 138+, Edge with Phi 4 Mini |
-| Runtime       | Client-only — add `"use client"` in Next.js app router or other RSC setups  |
-| Module format | ESM only                                                                    |
-| Node          | 22+ for local development; runtime is the browser                           |
+| Requirement   | Version                                                                  |
+| ------------- | ------------------------------------------------------------------------ |
+| React         | 18.x or 19.x (peer dependency)                                           |
+| Browser       | Chromium with Built-in AI globals — Chrome 138+, Edge                    |
+| Runtime       | Client-only — add `"use client"` in RSC setups (e.g. Next.js app router) |
+| Module format | ESM only                                                                 |
+| Node          | 22+ for development (runtime is the browser)                             |
 
 ## Capability check
 
@@ -116,9 +116,9 @@ function Demo() {
         console.log(out);
       }}
     >
-      {translator.status === "ready"
-        ? "Translate"
-        : `Prepare (${(translator.progress * 100) | 0}%)`}
+      {translator.status === "downloading"
+        ? `Downloading (${translator.progress * 100}%)`
+        : "Translate"}
     </button>
   );
 }
@@ -163,7 +163,7 @@ Because a creator requires a user activation when a download is needed, prefer c
 ## Download progress
 
 - **Per-instance** — read `progress` and `status` from the hook return (or the creator's lifecycle, which writes to the same place).
-- **Cross-instance** — `useGlobalDownloadProgress(namespace?)` reports the highest in-flight progress across every instance, regardless of which component (or imperative caller) initiated the download. Pass a namespace (`"Translator"`, `"Rewriter"`, `"Proofreader"`, `"Summarizer"`, `"Writer"`, `"LanguageDetector"`) to scope to one API, or call with no argument to aggregate across all built-in AI downloads.
+- **Cross-instance** — `useGlobalDownloadProgress(namespace?)` reports the highest in-flight progress across every instance, regardless of which component (or imperative caller) initiated the download. Pass a namespace (`"Translator"`, `"Rewriter"`, `"Proofreader"`, `"Summarizer"`, `"Writer"`, `"LanguageDetector"`) to scope to one API, or call with no argument to aggregate across all Built-in AI downloads.
 
 ```tsx
 function GlobalDownloadBar() {
@@ -173,7 +173,7 @@ function GlobalDownloadBar() {
 }
 ```
 
-## Options
+## Option changes
 
 | Behavior          | Detail                                                                                                  |
 | ----------------- | ------------------------------------------------------------------------------------------------------- |
