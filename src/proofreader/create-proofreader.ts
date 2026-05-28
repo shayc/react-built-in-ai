@@ -13,13 +13,15 @@ export interface CreateProofreaderOptions extends ProofreaderOptions {
 /**
  * Imperative `Proofreader` factory. Mirrors the {@link useProofreader}
  * lifecycle for call sites that decide options mid-flow and can't render a
- * hook (queued passes, command palettes, one-shot scripts).
+ * hook.
  *
  * Throws {@link UnsupportedError}, {@link UnavailableError}, or
  * {@link NoUserActivationError} — call from a user-activation handler when a
- * download may be required, or pre-warm via {@link useProofreader}. The
- * returned instance is `AsyncDisposable`; prefer `await using` to release on
- * scope exit.
+ * download may be required, or pre-warm via {@link useProofreader}. Other
+ * browser rejections (e.g. `AbortError` when `signal` fires, `NetworkError`
+ * on download failure) surface unchanged; use `instanceof BuiltInAIError` to
+ * separate library errors from pass-through rejections. The returned instance
+ * is `AsyncDisposable`; prefer `await using` to release on scope exit.
  *
  * @example
  * ```ts

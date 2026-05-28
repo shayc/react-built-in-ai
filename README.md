@@ -103,7 +103,7 @@ try {
 }
 ```
 
-Each `create*` mirrors the hook lifecycle exactly: same `UnsupportedError` / `UnavailableError` / `NoUserActivationError` conditions, same progress wiring. The returned instance is `AsyncDisposable` — prefer `await using` so the instance is released on scope exit. `.destroy()` is still exposed for callers that need to release the model earlier. Each creator accepts the same options as its hook plus an optional `signal` that cancels both the download (if any) and the underlying `create()` call.
+Each `create*` mirrors the hook lifecycle exactly: same `UnsupportedError` / `UnavailableError` / `NoUserActivationError` conditions, same progress wiring — except that other browser rejections (`AbortError` when `signal` fires, `NetworkError` on a failed download) surface unchanged rather than wrapped, which is why the example re-throws anything that isn't a `BuiltInAIError`. The returned instance is `AsyncDisposable` — prefer `await using` so the instance is released on scope exit. `.destroy()` is still exposed for callers that need to release the model earlier. Each creator accepts the same options as its hook plus an optional `signal` that cancels both the download (if any) and the underlying `create()` call.
 
 Because a creator requires a user activation when a download is needed, prefer calling it from an event handler — or pre-warm the model via the matching hook elsewhere in the tree before the call site is reached.
 

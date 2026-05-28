@@ -13,12 +13,15 @@ export interface CreateTranslatorOptions extends TranslatorOptions {
 /**
  * Imperative `Translator` factory. Mirrors the {@link useTranslator} lifecycle
  * for call sites that decide the language pair mid-flow and can't render a
- * hook (queued translations, command palettes, one-shot scripts).
+ * hook.
  *
  * Throws {@link UnsupportedError}, {@link UnavailableError}, or
  * {@link NoUserActivationError} — call from a user-activation handler when a
- * download may be required, or pre-warm via {@link useTranslator}. The returned
- * instance is `AsyncDisposable`; prefer `await using` to release on scope exit.
+ * download may be required, or pre-warm via {@link useTranslator}. Other
+ * browser rejections (e.g. `AbortError` when `signal` fires, `NetworkError`
+ * on download failure) surface unchanged; use `instanceof BuiltInAIError` to
+ * separate library errors from pass-through rejections. The returned instance
+ * is `AsyncDisposable`; prefer `await using` to release on scope exit.
  *
  * @example
  * ```ts
