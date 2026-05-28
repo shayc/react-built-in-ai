@@ -12,13 +12,15 @@ export interface CreateRewriterOptions extends RewriterOptions {
 
 /**
  * Imperative `Rewriter` factory. Mirrors the {@link useRewriter} lifecycle for
- * call sites that decide options mid-flow and can't render a hook (queued
- * rewrites, command palettes, one-shot scripts).
+ * call sites that decide options mid-flow and can't render a hook.
  *
  * Throws {@link UnsupportedError}, {@link UnavailableError}, or
  * {@link NoUserActivationError} — call from a user-activation handler when a
- * download may be required, or pre-warm via {@link useRewriter}. The returned
- * instance is `AsyncDisposable`; prefer `await using` to release on scope exit.
+ * download may be required, or pre-warm via {@link useRewriter}. Other browser
+ * rejections (e.g. `AbortError` when `signal` fires, `NetworkError` on
+ * download failure) surface unchanged; use `instanceof BuiltInAIError` to
+ * separate library errors from pass-through rejections. The returned instance
+ * is `AsyncDisposable`; prefer `await using` to release on scope exit.
  *
  * @example
  * ```ts
