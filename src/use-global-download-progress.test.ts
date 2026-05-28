@@ -29,7 +29,7 @@ describe("useGlobalDownloadProgress", () => {
     const { result } = await renderHook(() =>
       useGlobalDownloadProgress("Translator"),
     );
-    expect(result.current).toBe(0);
+    expect(result.current).toBeNull();
 
     setDownloadProgress("Translator:en:fr", 0.25);
     await vi.waitFor(() => expect(result.current).toBe(0.25));
@@ -65,7 +65,7 @@ describe("useGlobalDownloadProgress", () => {
 
   test("with no argument, aggregates across every namespace", async () => {
     const { result } = await renderHook(() => useGlobalDownloadProgress());
-    expect(result.current).toBe(0);
+    expect(result.current).toBeNull();
 
     setDownloadProgress("Translator:en:fr", 0.2);
     await vi.waitFor(() => expect(result.current).toBe(0.2));

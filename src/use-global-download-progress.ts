@@ -12,18 +12,22 @@ import {
  *
  * @param namespace - Restrict aggregation to one API. Omit to aggregate
  * across every built-in AI download currently in flight.
- * @returns Progress in `[0, 1]`; `0` when nothing is downloading.
+ * @returns Progress in `[0, 1]` while a download is in flight; `null` when
+ * nothing is downloading. `null` (not `0`) lets callers tell "no download"
+ * apart from "download just started at 0%".
  *
  * @example
  * ```tsx
  * function GlobalDownloadBar() {
  *   const progress = useGlobalDownloadProgress();
- *   if (progress === 0) return null;
+ *   if (progress === null) return null;
  *   return <ProgressBar value={progress} />;
  * }
  * ```
  */
-export function useGlobalDownloadProgress(namespace?: BuiltInAIName): number {
+export function useGlobalDownloadProgress(
+  namespace?: BuiltInAIName,
+): number | null {
   return useSyncExternalStore(subscribeProgress, () =>
     snapshotProgressFor(namespace),
   );

@@ -212,7 +212,7 @@ describe("createInstance", () => {
     resolveCreate({ destroy: vi.fn() });
     await pending;
 
-    expect(snapshotProgressFor(NAMESPACE)).toBe(0);
+    expect(snapshotProgressFor(NAMESPACE)).toBeNull();
     clearDownloadProgress(`${NAMESPACE}:{"mode":"a"}`);
   });
 
@@ -228,7 +228,7 @@ describe("createInstance", () => {
       name: NAMESPACE,
       options: { mode: "a" },
     });
-    expect(snapshotProgressFor(NAMESPACE)).toBe(0);
+    expect(snapshotProgressFor(NAMESPACE)).toBeNull();
     expect(snapshotProgressFor(OTHER_NAMESPACE)).toBe(0.42);
     clearDownloadProgress(OTHER_NAMESPACE);
   });

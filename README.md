@@ -168,7 +168,7 @@ Because a creator requires a user activation when a download is needed, prefer c
 ```tsx
 function GlobalDownloadBar() {
   const progress = useGlobalDownloadProgress();
-  if (progress === 0) return null;
+  if (progress === null) return null;
   return <ProgressBar value={progress} />;
 }
 ```

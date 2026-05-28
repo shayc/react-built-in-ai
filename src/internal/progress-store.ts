@@ -29,16 +29,19 @@ export function clearDownloadProgress(key: string): void {
   notify();
 }
 
-export function snapshotProgressFor(prefix: string | undefined): number {
+/**
+ * Highest progress among matching keys, or `null` when none are in flight.
+ * `null` (not `0`) distinguishes "nothing downloading" from "started at 0%" —
+ * the max of an empty set is absent, not zero.
+ */
+export function snapshotProgressFor(prefix: string | undefined): number | null {
   const sep = prefix === undefined ? undefined : `${prefix}:`;
-  let max = 0;
+  let max: number | null = null;
   for (const [key, progress] of progressByKey) {
     if (sep !== undefined && key !== prefix && !key.startsWith(sep)) {
       continue;
     }
-    if (progress > max) {
-      max = progress;
-    }
+    max = max === null ? progress : Math.max(max, progress);
   }
   return max;
 }
