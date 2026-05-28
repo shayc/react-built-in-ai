@@ -5,7 +5,7 @@ import { buildRewriterInstance } from "../internal/testing/instance-fakes";
 import { useRewriter } from "./use-rewriter";
 
 describe("useRewriter", () => {
-  test("reaches ready and exposes inputQuota from the instance", async () => {
+  test("exposes the instance's inputQuota once ready", async () => {
     const { Fake } = makeAIFake({ buildInstance: buildRewriterInstance });
     vi.stubGlobal("Rewriter", Fake);
 
@@ -17,7 +17,7 @@ describe("useRewriter", () => {
     expect(result.current.inputQuota).toBe(768);
   });
 
-  test("rewrite() forwards both input and context to the instance", async () => {
+  test("rewrite() forwards input and context, resolving with the instance's result", async () => {
     const { Fake } = makeAIFake({ buildInstance: buildRewriterInstance });
     vi.stubGlobal("Rewriter", Fake);
 
@@ -29,17 +29,35 @@ describe("useRewriter", () => {
     ).resolves.toBe("R(softer):hello");
   });
 
-  test("rewriteStream() yields all chunks from the streaming source", async () => {
+  test("rewriteStream() yields the instance's chunks", async () => {
     const { Fake } = makeAIFake({ buildInstance: buildRewriterInstance });
     vi.stubGlobal("Rewriter", Fake);
 
     const { result } = await renderHook(() => useRewriter());
     await vi.waitFor(() => expect(result.current.status).toBe("ready"));
 
-    const out: string[] = [];
+    const chunks: string[] = [];
     for await (const c of result.current.rewriteStream("hi")) {
-      out.push(c);
+      chunks.push(c);
     }
-    expect(out).toEqual(["R:", "alt"]);
+    expect(chunks).toEqual(["R:", "alt"]);
+  });
+
+  test("measureInput() forwards input and context to the instance", async () => {
+    const { Fake, instances } = makeAIFake({
+      buildInstance: buildRewriterInstance,
+    });
+    vi.stubGlobal("Rewriter", Fake);
+
+    const { result } = await renderHook(() => useRewriter());
+    await vi.waitFor(() => expect(result.current.status).toBe("ready"));
+
+    await expect(
+      result.current.measureInput("hi", { context: "softer" }),
+    ).resolves.toBe(4);
+    expect(instances[0].measureInputUsage).toHaveBeenCalledWith(
+      "hi",
+      expect.objectContaining({ context: "softer" }),
+    );
   });
 });

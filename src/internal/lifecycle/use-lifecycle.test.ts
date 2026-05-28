@@ -216,7 +216,7 @@ describe("useLifecycle", () => {
 
     resolveCreate(buildInstance());
     await vi.waitFor(() => expect(result.current.status).toBe("ready"));
-    expect(snapshotProgressFor(NAMESPACE)).toBe(0);
+    expect(snapshotProgressFor(NAMESPACE)).toBeNull();
   });
 
   test("emits progress via downloadprogress events while creating", async () => {

@@ -3,4 +3,5 @@ dist
 coverage
 .eslintcache
 *.log
+*.tgz
 .DS_Store

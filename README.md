@@ -1,6 +1,6 @@
 # `@shayc/react-built-in-ai`
 
-A thin React layer over the browser's [Built-in AI](https://developer.chrome.com/docs/ai/built-in) APIs — Gemini Nano on Chrome, Phi 4 Mini on Edge. Three task APIs, each with a React hook and an imperative creator, all sharing one lifecycle state machine.
+A thin React layer over the browser's [Built-in AI](https://developer.chrome.com/docs/ai/built-in) APIs — Gemini Nano on Chrome, Phi 4 Mini on Edge. Six task APIs, each with a React hook and an imperative creator, all sharing one lifecycle state machine.
 
 [![npm version](https://img.shields.io/npm/v/@shayc/react-built-in-ai.svg)](https://www.npmjs.com/package/@shayc/react-built-in-ai)
 [![CI](https://github.com/shayc/react-built-in-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/shayc/react-built-in-ai/actions/workflows/ci.yml)
@@ -44,15 +44,18 @@ The first click on a fresh browser triggers the model download (gated by user ac
 
 ## Surface
 
-| Task API    | React hook       | Imperative creator  | Underlying browser API                                                  |
-| ----------- | ---------------- | ------------------- | ----------------------------------------------------------------------- |
-| Translator  | `useTranslator`  | `createTranslator`  | [Translator API](https://developer.chrome.com/docs/ai/translator-api)   |
-| Rewriter    | `useRewriter`    | `createRewriter`    | [Rewriter API](https://developer.chrome.com/docs/ai/rewriter-api)       |
-| Proofreader | `useProofreader` | `createProofreader` | [Proofreader API](https://developer.chrome.com/docs/ai/proofreader-api) |
+| Task API         | React hook            | Imperative creator       | Underlying browser API                                                           |
+| ---------------- | --------------------- | ------------------------ | -------------------------------------------------------------------------------- |
+| Translator       | `useTranslator`       | `createTranslator`       | [Translator API](https://developer.chrome.com/docs/ai/translator-api)            |
+| Rewriter         | `useRewriter`         | `createRewriter`         | [Rewriter API](https://developer.chrome.com/docs/ai/rewriter-api)                |
+| Proofreader      | `useProofreader`      | `createProofreader`      | [Proofreader API](https://developer.chrome.com/docs/ai/proofreader-api)          |
+| Summarizer       | `useSummarizer`       | `createSummarizer`       | [Summarizer API](https://developer.chrome.com/docs/ai/summarizer-api)            |
+| Writer           | `useWriter`           | `createWriter`           | [Writer API](https://developer.chrome.com/docs/ai/writer-api)                    |
+| LanguageDetector | `useLanguageDetector` | `createLanguageDetector` | [Language Detector API](https://developer.chrome.com/docs/ai/language-detection) |
 
 **Use the hook** when the options are known at render time (e.g. a translator bound to the user's current language pair). **Use the creator** when options are decided mid-flow and a hook can't be driven (queued work, command palettes, one-shot scripts).
 
-All three hooks share the lifecycle surface plus task-specific methods (`translate`, `rewrite`, `proofread`, plus streaming and `measureInput` variants where the underlying API supports them). `useProofreader` is the exception: the browser API exposes no `measureInputUsage` or `inputQuota`, so the hook omits both.
+Every hook shares the lifecycle surface plus task-specific methods (`translate`, `rewrite`, `proofread`, `summarize`, `write`, `detect`, plus streaming and `measureInput` variants where the underlying API supports them). Two exceptions: `useProofreader` omits `measureInput`/`inputQuota` (the browser API exposes neither), and `useLanguageDetector` has no streaming variant — its `detect` resolves with an array of ranked `{ detectedLanguage, confidence }` candidates rather than a string.
 
 ## Requirements
 
@@ -74,7 +77,7 @@ import { isSupported } from "@shayc/react-built-in-ai";
 if (!isSupported("Translator")) return <Fallback />;
 ```
 
-`isSupported(name)` returns `true` when the matching global (`"Translator"`, `"Rewriter"`, `"Proofreader"`) is present on `globalThis`. Combine with the hook's `status` (`"unavailable"`) for the full readiness picture — the global can exist on a device that still can't run the model.
+`isSupported(name)` returns `true` when the matching global (`"Translator"`, `"Rewriter"`, `"Proofreader"`, `"Summarizer"`, `"Writer"`, `"LanguageDetector"`) is present on `globalThis`. Combine with the hook's `status` (`"unavailable"`) for the full readiness picture — the global can exist on a device that still can't run the model.
 
 ## Lifecycle
 
@@ -89,7 +92,7 @@ Every hook exposes `status`, `progress`, `error`, and `prepare`. `status` is alw
 
 ## Usage
 
-Action methods are gated by the lifecycle — they throw `UnsupportedError`, `UnavailableError`, `NoUserActivationError`, or `NotReadyError` when the state forbids them. **A rejected call never mutates the hook's `status` or `error`.**
+Action methods are gated by the lifecycle — they throw `UnsupportedError`, `UnavailableError`, `NoUserActivationError`, or `NotReadyError` when the state forbids them. **A call rejected by the gate never mutates the hook's `status` or `error`.** (A call made from `idle` that triggers a download is not gate-rejected — it drives `status` through `downloading` to `ready` or `error` like `prepare()`.)
 
 ```tsx
 function Demo() {
@@ -160,12 +163,12 @@ Because a creator requires a user activation when a download is needed, prefer c
 ## Download progress
 
 - **Per-instance** — read `progress` and `status` from the hook return (or the creator's lifecycle, which writes to the same place).
-- **Cross-instance** — `useGlobalDownloadProgress(namespace?)` reports the highest in-flight progress across every instance, regardless of which component (or imperative caller) initiated the download. Pass a namespace (`"Translator"`, `"Rewriter"`, `"Proofreader"`) to scope to one API, or call with no argument to aggregate across all built-in AI downloads.
+- **Cross-instance** — `useGlobalDownloadProgress(namespace?)` reports the highest in-flight progress across every instance, regardless of which component (or imperative caller) initiated the download. Pass a namespace (`"Translator"`, `"Rewriter"`, `"Proofreader"`, `"Summarizer"`, `"Writer"`, `"LanguageDetector"`) to scope to one API, or call with no argument to aggregate across all built-in AI downloads.
 
 ```tsx
 function GlobalDownloadBar() {
   const progress = useGlobalDownloadProgress();
-  if (progress === 0) return null;
+  if (progress === null) return null;
   return <ProgressBar value={progress} />;
 }
 ```
