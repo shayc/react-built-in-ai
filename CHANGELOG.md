@@ -1,5 +1,12 @@
 # @shayc/react-built-in-ai
 
+## 0.3.0
+
+### Minor Changes
+
+- 7f28696: Add the remaining Built-in AI task APIs: `useSummarizer`/`createSummarizer`, `useWriter`/`createWriter`, and `useLanguageDetector`/`createLanguageDetector`. Summarizer and Writer expose the same `summarize`/`write` + streaming + `measureInput`/`inputQuota` surface as the existing hooks; `useLanguageDetector.detect` resolves with the browser's ranked `LanguageDetectionResult[]` and has no streaming variant. `isSupported` and `useGlobalDownloadProgress` now accept the three new namespace names.
+- 7f28696: `useGlobalDownloadProgress` now returns `number | null` — `null` when nothing is downloading, instead of `0`. This lets callers distinguish "no download in flight" from "download just started at 0%". Update guards from `progress === 0` to `progress === null`.
+
 ## 0.2.2
 
 ### Patch Changes
