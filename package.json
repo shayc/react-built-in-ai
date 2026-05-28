@@ -13,14 +13,13 @@
   },
   "keywords": [
     "react",
-    "hooks",
-    "translator",
-    "rewriter",
-    "proofreader",
-    "gemini-nano",
+    "react-hooks",
     "built-in-ai",
-    "web-ai",
-    "browser-ai"
+    "gemini-nano",
+    "browser-ai",
+    "ai-translator",
+    "ai-rewriter",
+    "ai-proofreader"
   ],
   "type": "module",
   "sideEffects": false,
