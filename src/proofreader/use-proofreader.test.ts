@@ -5,16 +5,7 @@ import { buildProofreaderInstance } from "../internal/testing/instance-fakes";
 import { useProofreader } from "./use-proofreader";
 
 describe("useProofreader", () => {
-  test("reaches ready", async () => {
-    const { Fake } = makeAIFake({ buildInstance: buildProofreaderInstance });
-    vi.stubGlobal("Proofreader", Fake);
-
-    const { result } = await renderHook(() => useProofreader());
-
-    await vi.waitFor(() => expect(result.current.status).toBe("ready"));
-  });
-
-  test("proofread() forwards input and returns a ProofreadResult from the instance", async () => {
+  test("proofread() forwards input and resolves with the instance's ProofreadResult", async () => {
     const { Fake } = makeAIFake({ buildInstance: buildProofreaderInstance });
     vi.stubGlobal("Proofreader", Fake);
 
@@ -31,7 +22,7 @@ describe("useProofreader", () => {
     });
   });
 
-  test("ProofreaderHookReturn omits inputQuota and measureInput (compile-time)", () => {
+  test("omits inputQuota and measureInput (compile-time)", () => {
     // Arrow is never invoked — runtime skipped; tsc still type-checks the accesses.
     void (() => {
       const ret = useProofreader();

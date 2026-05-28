@@ -5,7 +5,7 @@ import { buildWriterInstance } from "../internal/testing/instance-fakes";
 import { useWriter } from "./use-writer";
 
 describe("useWriter", () => {
-  test("reaches ready and exposes inputQuota from the instance", async () => {
+  test("exposes the instance's inputQuota once ready", async () => {
     const { Fake } = makeAIFake({ buildInstance: buildWriterInstance });
     vi.stubGlobal("Writer", Fake);
 
@@ -15,7 +15,7 @@ describe("useWriter", () => {
     expect(result.current.inputQuota).toBe(1536);
   });
 
-  test("write() forwards both input and context to the instance", async () => {
+  test("write() forwards input and context, resolving with the instance's result", async () => {
     const { Fake } = makeAIFake({ buildInstance: buildWriterInstance });
     vi.stubGlobal("Writer", Fake);
 
@@ -27,23 +27,35 @@ describe("useWriter", () => {
     ).resolves.toBe("W(polite):hello");
   });
 
-  test("writeStream() yields all chunks from the streaming source", async () => {
+  test("writeStream() yields the instance's chunks", async () => {
     const { Fake } = makeAIFake({ buildInstance: buildWriterInstance });
     vi.stubGlobal("Writer", Fake);
 
     const { result } = await renderHook(() => useWriter());
     await vi.waitFor(() => expect(result.current.status).toBe("ready"));
 
-    const out: string[] = [];
+    const chunks: string[] = [];
     for await (const c of result.current.writeStream("hi")) {
-      out.push(c);
+      chunks.push(c);
     }
-    expect(out).toEqual(["W:", "draft"]);
+    expect(chunks).toEqual(["W:", "draft"]);
   });
 
-  test("useWriter options argument is optional (compile-time)", () => {
-    // Arrow is never invoked — runtime skipped; tsc still type-checks the calls.
-    void (() => useWriter());
-    void (() => useWriter(undefined));
+  test("measureInput() forwards input and context to the instance", async () => {
+    const { Fake, instances } = makeAIFake({
+      buildInstance: buildWriterInstance,
+    });
+    vi.stubGlobal("Writer", Fake);
+
+    const { result } = await renderHook(() => useWriter());
+    await vi.waitFor(() => expect(result.current.status).toBe("ready"));
+
+    await expect(
+      result.current.measureInput("hi", { context: "polite" }),
+    ).resolves.toBe(6);
+    expect(instances[0].measureInputUsage).toHaveBeenCalledWith(
+      "hi",
+      expect.objectContaining({ context: "polite" }),
+    );
   });
 });

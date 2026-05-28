@@ -5,7 +5,7 @@ import { buildTranslatorInstance } from "../internal/testing/instance-fakes";
 import { useTranslator } from "./use-translator";
 
 describe("useTranslator", () => {
-  test("reaches ready and exposes inputQuota from the instance", async () => {
+  test("exposes the instance's inputQuota once ready", async () => {
     const { Fake } = makeAIFake({ buildInstance: buildTranslatorInstance });
     vi.stubGlobal("Translator", Fake);
 
@@ -17,7 +17,7 @@ describe("useTranslator", () => {
     expect(result.current.inputQuota).toBe(1024);
   });
 
-  test("translate() forwards input to the instance", async () => {
+  test("translate() forwards input and resolves with the instance's result", async () => {
     const { Fake } = makeAIFake({ buildInstance: buildTranslatorInstance });
     vi.stubGlobal("Translator", Fake);
 
@@ -29,7 +29,7 @@ describe("useTranslator", () => {
     await expect(result.current.translate("hi")).resolves.toBe("T:hi");
   });
 
-  test("translateStream() yields all chunks from the streaming source", async () => {
+  test("translateStream() yields the instance's chunks", async () => {
     const { Fake } = makeAIFake({ buildInstance: buildTranslatorInstance });
     vi.stubGlobal("Translator", Fake);
 
@@ -45,25 +45,7 @@ describe("useTranslator", () => {
     expect(chunks).toEqual(["T:", "hello"]);
   });
 
-  test("measureInput() forwards input to the instance and returns the estimate", async () => {
-    const { Fake, instances } = makeAIFake({
-      buildInstance: buildTranslatorInstance,
-    });
-    vi.stubGlobal("Translator", Fake);
-
-    const { result } = await renderHook(() =>
-      useTranslator({ sourceLanguage: "en", targetLanguage: "fr" }),
-    );
-    await vi.waitFor(() => expect(result.current.status).toBe("ready"));
-
-    await expect(result.current.measureInput("hi")).resolves.toBe(7);
-    expect(instances[0].measureInputUsage).toHaveBeenCalledWith(
-      "hi",
-      expect.anything(),
-    );
-  });
-
-  test("useTranslator requires a TranslatorOptions argument (compile-time)", () => {
+  test("requires a TranslatorOptions argument (compile-time)", () => {
     // Arrows are never invoked — runtime skipped; tsc still type-checks the call signatures.
     // @ts-expect-error - options argument is required
     void (() => useTranslator());

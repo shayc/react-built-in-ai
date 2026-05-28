@@ -5,7 +5,7 @@ import { buildLanguageDetectorInstance } from "../internal/testing/instance-fake
 import { useLanguageDetector } from "./use-language-detector";
 
 describe("useLanguageDetector", () => {
-  test("reaches ready and exposes inputQuota from the instance", async () => {
+  test("exposes the instance's inputQuota once ready", async () => {
     const { Fake } = makeAIFake({
       buildInstance: buildLanguageDetectorInstance,
     });
@@ -17,7 +17,7 @@ describe("useLanguageDetector", () => {
     expect(result.current.inputQuota).toBe(512);
   });
 
-  test("detect() forwards input and returns ranked candidates from the instance", async () => {
+  test("detect() forwards input and resolves with the instance's ranked candidates", async () => {
     const { Fake, instances } = makeAIFake({
       buildInstance: buildLanguageDetectorInstance,
     });
@@ -37,7 +37,7 @@ describe("useLanguageDetector", () => {
     ]);
   });
 
-  test("LanguageDetectorHookReturn omits streaming (compile-time)", () => {
+  test("exposes no streaming variant (compile-time)", () => {
     // Arrow is never invoked — runtime skipped; tsc still type-checks the access.
     void (() => {
       const ret = useLanguageDetector();

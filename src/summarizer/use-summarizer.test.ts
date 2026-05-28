@@ -5,7 +5,7 @@ import { buildSummarizerInstance } from "../internal/testing/instance-fakes";
 import { useSummarizer } from "./use-summarizer";
 
 describe("useSummarizer", () => {
-  test("reaches ready and exposes inputQuota from the instance", async () => {
+  test("exposes the instance's inputQuota once ready", async () => {
     const { Fake } = makeAIFake({ buildInstance: buildSummarizerInstance });
     vi.stubGlobal("Summarizer", Fake);
 
@@ -17,7 +17,7 @@ describe("useSummarizer", () => {
     expect(result.current.inputQuota).toBe(2048);
   });
 
-  test("summarize() forwards both input and context to the instance", async () => {
+  test("summarize() forwards input and context, resolving with the instance's result", async () => {
     const { Fake } = makeAIFake({ buildInstance: buildSummarizerInstance });
     vi.stubGlobal("Summarizer", Fake);
 
@@ -29,23 +29,35 @@ describe("useSummarizer", () => {
     ).resolves.toBe("S(brief):hello");
   });
 
-  test("summarizeStream() yields all chunks from the streaming source", async () => {
+  test("summarizeStream() yields the instance's chunks", async () => {
     const { Fake } = makeAIFake({ buildInstance: buildSummarizerInstance });
     vi.stubGlobal("Summarizer", Fake);
 
     const { result } = await renderHook(() => useSummarizer());
     await vi.waitFor(() => expect(result.current.status).toBe("ready"));
 
-    const out: string[] = [];
+    const chunks: string[] = [];
     for await (const c of result.current.summarizeStream("hi")) {
-      out.push(c);
+      chunks.push(c);
     }
-    expect(out).toEqual(["S:", "sum"]);
+    expect(chunks).toEqual(["S:", "sum"]);
   });
 
-  test("useSummarizer options argument is optional (compile-time)", () => {
-    // Arrow is never invoked — runtime skipped; tsc still type-checks the calls.
-    void (() => useSummarizer());
-    void (() => useSummarizer(undefined));
+  test("measureInput() forwards input and context to the instance", async () => {
+    const { Fake, instances } = makeAIFake({
+      buildInstance: buildSummarizerInstance,
+    });
+    vi.stubGlobal("Summarizer", Fake);
+
+    const { result } = await renderHook(() => useSummarizer());
+    await vi.waitFor(() => expect(result.current.status).toBe("ready"));
+
+    await expect(
+      result.current.measureInput("hi", { context: "brief" }),
+    ).resolves.toBe(5);
+    expect(instances[0].measureInputUsage).toHaveBeenCalledWith(
+      "hi",
+      expect.objectContaining({ context: "brief" }),
+    );
   });
 });
