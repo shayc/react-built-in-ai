@@ -18,7 +18,6 @@ npm run lint        # eslint
 npm run typecheck   # tsc --noEmit
 npm test            # vitest run (browser mode, chromium)
 npm run build       # tsdown → dist/
-npm run pack:check  # publint + are-the-types-wrong
 ```
 
 ## Pull requests

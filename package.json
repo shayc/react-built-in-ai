@@ -3,6 +3,7 @@
   "version": "0.2.0",
   "description": "React hooks for the browser Built-in AI APIs (Translator, Rewriter, Proofreader).",
   "license": "MIT",
+  "author": "Shay Cojocaru <shayc@outlook.com>",
   "homepage": "https://github.com/shayc/react-built-in-ai#readme",
   "repository": {
     "type": "git",
