@@ -44,14 +44,14 @@ The first click on a fresh browser triggers the model download (gated by user ac
 
 ## Surface
 
-| Task API         | React hook            | Imperative creator       | Underlying browser API                                                           |
-| ---------------- | --------------------- | ------------------------ | -------------------------------------------------------------------------------- |
-| Translator       | `useTranslator`       | `createTranslator`       | [Translator API](https://developer.chrome.com/docs/ai/translator-api)            |
-| Rewriter         | `useRewriter`         | `createRewriter`         | [Rewriter API](https://developer.chrome.com/docs/ai/rewriter-api)                |
-| Proofreader      | `useProofreader`      | `createProofreader`      | [Proofreader API](https://developer.chrome.com/docs/ai/proofreader-api)          |
-| Summarizer       | `useSummarizer`       | `createSummarizer`       | [Summarizer API](https://developer.chrome.com/docs/ai/summarizer-api)            |
-| Writer           | `useWriter`           | `createWriter`           | [Writer API](https://developer.chrome.com/docs/ai/writer-api)                    |
-| LanguageDetector | `useLanguageDetector` | `createLanguageDetector` | [Language Detector API](https://developer.chrome.com/docs/ai/language-detection) |
+| Browser API                                                                  | React hook            | Imperative creator       |
+| ---------------------------------------------------------------------------- | --------------------- | ------------------------ |
+| [Translator](https://developer.chrome.com/docs/ai/translator-api)            | `useTranslator`       | `createTranslator`       |
+| [Rewriter](https://developer.chrome.com/docs/ai/rewriter-api)                | `useRewriter`         | `createRewriter`         |
+| [Proofreader](https://developer.chrome.com/docs/ai/proofreader-api)          | `useProofreader`      | `createProofreader`      |
+| [Summarizer](https://developer.chrome.com/docs/ai/summarizer-api)            | `useSummarizer`       | `createSummarizer`       |
+| [Writer](https://developer.chrome.com/docs/ai/writer-api)                    | `useWriter`           | `createWriter`           |
+| [Language Detector](https://developer.chrome.com/docs/ai/language-detection) | `useLanguageDetector` | `createLanguageDetector` |
 
 **Use the hook** when the options are known at render time (e.g. a translator bound to the user's current language pair). **Use the creator** when options are decided mid-flow and a hook can't be driven (queued work, command palettes, one-shot scripts).
 
