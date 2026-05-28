@@ -2,19 +2,45 @@
 
 A thin React layer over the browser's [Built-in AI](https://developer.chrome.com/docs/ai/built-in) APIs — Gemini Nano on Chrome, Phi 4 Mini on Edge. Three task APIs, each with a React hook and an imperative creator, all sharing one lifecycle state machine.
 
+[![npm version](https://img.shields.io/npm/v/@shayc/react-built-in-ai.svg)](https://www.npmjs.com/package/@shayc/react-built-in-ai)
+[![CI](https://github.com/shayc/react-built-in-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/shayc/react-built-in-ai/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/npm/l/@shayc/react-built-in-ai.svg)](LICENSE)
+
 ## Install
 
 ```bash
 npm install @shayc/react-built-in-ai
 ```
 
-Requires React 18 or 19, and a Chromium-based browser that exposes the Built-in AI globals (Chrome 138+).
-
 ## Quick start
 
-```ts
-import { useTranslator, createTranslator } from "@shayc/react-built-in-ai";
+```tsx
+import { useTranslator } from "@shayc/react-built-in-ai";
+
+function Translate() {
+  const translator = useTranslator({
+    sourceLanguage: "en",
+    targetLanguage: "es",
+  });
+
+  return (
+    <button
+      disabled={translator.status === "downloading"}
+      onClick={async () => alert(await translator.translate("Hello, world."))}
+    >
+      Translate
+    </button>
+  );
+}
 ```
+
+The first click on a fresh browser triggers the model download (gated by user activation); subsequent clicks call `translate` directly. See [Lifecycle](#lifecycle) for the full state machine.
+
+## Features
+
+- **First-class TypeScript** — full `.d.mts` types and a `BuiltInAIError` hierarchy (`UnsupportedError`, `UnavailableError`, `NoUserActivationError`, `NotReadyError`) for narrow `catch` clauses.
+- **`AsyncDisposable` instances** — use `await using` for automatic teardown; `.destroy()` stays exposed for callers that need to release earlier.
+- **Cross-instance download progress** — `useGlobalDownloadProgress()` aggregates in-flight downloads across every hook and creator for a single global progress UI.
 
 ## Surface
 
@@ -26,18 +52,33 @@ import { useTranslator, createTranslator } from "@shayc/react-built-in-ai";
 
 **Use the hook** when the options are known at render time (e.g. a translator bound to the user's current language pair). **Use the creator** when options are decided mid-flow and a hook can't be driven (queued work, command palettes, one-shot scripts).
 
-Every hook returns the same lifecycle surface plus namespace-specific action methods (e.g. `translate`, `translateStream`, `measureInput`). `useProofreader` is the one exception: the underlying API exposes neither `measureInputUsage` nor `inputQuota`, so its hook return omits `measureInput` and `inputQuota`.
+All three hooks share the lifecycle surface plus task-specific methods (`translate`, `rewrite`, `proofread`, plus streaming and `measureInput` variants where the underlying API supports them). `useProofreader` is the exception: the browser API exposes no `measureInputUsage` or `inputQuota`, so the hook omits both.
+
+## Requirements
+
+| Requirement   | Version                                                                     |
+| ------------- | --------------------------------------------------------------------------- |
+| React         | 18.x or 19.x (peer dependency)                                              |
+| Browser       | Chromium-based with Built-in AI globals — Chrome 138+, Edge with Phi 4 Mini |
+| Runtime       | Client-only — add `"use client"` in Next.js app router or other RSC setups  |
+| Module format | ESM only                                                                    |
+| Node          | 22+ for local development; runtime is the browser                           |
+
+## Capability check
+
+The Built-in AI globals are gated by Chrome flags / origin trial and only present on supported builds. Feature-detect before mounting any hook:
+
+```tsx
+import { isSupported } from "@shayc/react-built-in-ai";
+
+if (!isSupported("Translator")) return <Fallback />;
+```
+
+`isSupported(name)` returns `true` when the matching global (`"Translator"`, `"Rewriter"`, `"Proofreader"`) is present on `globalThis`. Combine with the hook's `status` (`"unavailable"`) for the full readiness picture — the global can exist on a device that still can't run the model.
 
 ## Lifecycle
 
-```ts
-const { status, progress, error, prepare } = useTranslator({
-  sourceLanguage: "en",
-  targetLanguage: "es",
-});
-```
-
-`status` is always one of:
+Every hook exposes `status`, `progress`, `error`, and `prepare`. `status` is always one of:
 
 - **`unsupported`** — the global namespace is missing on this browser.
 - **`unavailable`** — the model reports it cannot run on this device.
@@ -46,7 +87,7 @@ const { status, progress, error, prepare } = useTranslator({
 - **`ready`** — the instance is live; action methods can be called freely.
 - **`error`** — `availability()` or `create()` rejected. Call `prepare()` to retry.
 
-## Acting
+## Usage
 
 Action methods are gated by the lifecycle — they throw `UnsupportedError`, `UnavailableError`, `NoUserActivationError`, or `NotReadyError` when the state forbids them. **A rejected call never mutates the hook's `status` or `error`.**
 
@@ -80,11 +121,16 @@ function Demo() {
 }
 ```
 
-Streaming:
+Streaming — accumulate chunks into React state to render incrementally:
 
-```ts
-for await (const chunk of translator.translateStream(text, { signal })) {
-  emit(chunk);
+```tsx
+const [output, setOutput] = useState("");
+
+async function handleTranslate(text: string) {
+  setOutput("");
+  for await (const chunk of translator.translateStream(text)) {
+    setOutput((prev) => prev + chunk);
+  }
 }
 ```
 
@@ -103,14 +149,18 @@ try {
 }
 ```
 
-Each `create*` mirrors the hook lifecycle exactly: same `UnsupportedError` / `UnavailableError` / `NoUserActivationError` conditions, same progress wiring — except that other browser rejections (`AbortError` when `signal` fires, `NetworkError` on a failed download) surface unchanged rather than wrapped, which is why the example re-throws anything that isn't a `BuiltInAIError`. The returned instance is `AsyncDisposable` — prefer `await using` so the instance is released on scope exit. `.destroy()` is still exposed for callers that need to release the model earlier. Each creator accepts the same options as its hook plus an optional `signal` that cancels both the download (if any) and the underlying `create()` call.
+Each `create*` mirrors the hook lifecycle exactly — same three typed errors (`UnsupportedError`, `UnavailableError`, `NoUserActivationError`), same progress wiring. Unlike the hooks, **other browser rejections surface unchanged** — most commonly `AbortError` when `signal` fires, or `NetworkError` on a failed download. The `instanceof BuiltInAIError` check above is what separates the typed lifecycle errors from those pass-throughs.
+
+The returned instance is `AsyncDisposable` — prefer `await using` so it's released on scope exit. `.destroy()` is also exposed for callers that need to release earlier.
+
+Each creator accepts the same options as its hook, plus an optional `signal` that cancels both the download (if any) and the underlying `create()` call.
 
 Because a creator requires a user activation when a download is needed, prefer calling it from an event handler — or pre-warm the model via the matching hook elsewhere in the tree before the call site is reached.
 
 ## Download progress
 
-- **Per-instance** — read `progress` and `status` from the hook return (or the creator's lifecycle, which writes to the same place). This is the right signal for "this specific translator/rewriter/proofreader is downloading."
-- **Cross-instance** — `useGlobalDownloadProgress(namespace?)` reports the highest in-flight progress across every instance, regardless of which component (or imperative caller) initiated the download. Pass a namespace (`"Translator"`, `"Rewriter"`, `"Proofreader"`) to scope to one API, or call with no argument to aggregate across all built-in AI downloads. Useful for a global indicator that lives outside any specific hook call site.
+- **Per-instance** — read `progress` and `status` from the hook return (or the creator's lifecycle, which writes to the same place).
+- **Cross-instance** — `useGlobalDownloadProgress(namespace?)` reports the highest in-flight progress across every instance, regardless of which component (or imperative caller) initiated the download. Pass a namespace (`"Translator"`, `"Rewriter"`, `"Proofreader"`) to scope to one API, or call with no argument to aggregate across all built-in AI downloads.
 
 ```tsx
 function GlobalDownloadBar() {
@@ -122,11 +172,15 @@ function GlobalDownloadBar() {
 
 ## Options
 
-Options are compared by **shallow per-key equality**. Memoize array-valued options (`expectedInputLanguages`, etc.) to avoid spurious re-creation. **Changing any option destroys the current instance, aborts in-flight work with `AbortError`, and re-enters the state machine.**
+| Behavior          | Detail                                                                                                  |
+| ----------------- | ------------------------------------------------------------------------------------------------------- |
+| Equality          | Shallow per-key, `Object.is`                                                                            |
+| Stable references | Memoize array-valued options (e.g. `expectedInputLanguages`) to avoid spurious re-creation              |
+| On change         | Destroys the current instance, aborts in-flight work with `AbortError`, and re-enters the state machine |
 
 ## Errors
 
-Lifecycle gating throws `BuiltInAIError` subclasses (table below). Action methods (`translate`, `rewrite`, …) pass the browser API's own rejections through unchanged — most commonly an `AbortError` `DOMException` when a `signal` fires. When the lifecycle wraps a browser rejection into `"error"` state, the original error is preserved as `error.cause`.
+Lifecycle gating throws `BuiltInAIError` subclasses. Action methods (`translate`, `rewrite`, …) pass the browser API's own rejections through unchanged — most commonly an `AbortError` `DOMException` when a `signal` fires. When the lifecycle wraps a browser rejection into `"error"` state, the original error is preserved as `error.cause`.
 
 | Error                   | What to do                                                                                                                    |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
@@ -139,9 +193,19 @@ Lifecycle gating throws `BuiltInAIError` subclasses (table below). Action method
 
 A per-call `signal` cancels the _caller's_ wait and the underlying action call, but does not tear down the shared model instance. If the hook is mid-download, aborting one call rejects that call with `AbortError` while the download keeps running for any other caller (and for the next call from the same component). **The download is only cancelled when the component unmounts or its options change.**
 
-## Capability check
+## Security
 
-`isSupported(name)` — `true` when the matching global (`"Translator"`, `"Rewriter"`, `"Proofreader"`) is present. Combine with the hook's `status` (`"unavailable"`) for the full readiness picture.
+No network calls — everything runs against the browser's on-device model. Releases are published to npm with [provenance attestations](https://docs.npmjs.com/generating-provenance-statements) so the bytes you install can be traced back to a specific GitHub Actions run.
+
+Found a security issue? Open a private advisory at [github.com/shayc/react-built-in-ai/security/advisories/new](https://github.com/shayc/react-built-in-ai/security/advisories/new).
+
+## Versioning
+
+Semver; see [CHANGELOG.md](CHANGELOG.md).
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup (Node 22+, Vitest browser mode, the changeset workflow).
 
 ## License
 
