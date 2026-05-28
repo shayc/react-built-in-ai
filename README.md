@@ -92,7 +92,7 @@ Every hook exposes `status`, `progress`, `error`, and `prepare`. `status` is alw
 
 ## Usage
 
-Action methods are gated by the lifecycle — they throw `UnsupportedError`, `UnavailableError`, `NoUserActivationError`, or `NotReadyError` when the state forbids them. **A rejected call never mutates the hook's `status` or `error`.**
+Action methods are gated by the lifecycle — they throw `UnsupportedError`, `UnavailableError`, `NoUserActivationError`, or `NotReadyError` when the state forbids them. **A call rejected by the gate never mutates the hook's `status` or `error`.** (A call made from `idle` that triggers a download is not gate-rejected — it drives `status` through `downloading` to `ready` or `error` like `prepare()`.)
 
 ```tsx
 function Demo() {

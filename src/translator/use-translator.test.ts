@@ -45,6 +45,24 @@ describe("useTranslator", () => {
     expect(chunks).toEqual(["T:", "hello"]);
   });
 
+  test("measureInput() forwards input to the instance and returns the estimate", async () => {
+    const { Fake, instances } = makeAIFake({
+      buildInstance: buildTranslatorInstance,
+    });
+    vi.stubGlobal("Translator", Fake);
+
+    const { result } = await renderHook(() =>
+      useTranslator({ sourceLanguage: "en", targetLanguage: "fr" }),
+    );
+    await vi.waitFor(() => expect(result.current.status).toBe("ready"));
+
+    await expect(result.current.measureInput("hi")).resolves.toBe(7);
+    expect(instances[0].measureInputUsage).toHaveBeenCalledWith(
+      "hi",
+      expect.anything(),
+    );
+  });
+
   test("useTranslator requires a TranslatorOptions argument (compile-time)", () => {
     // Arrows are never invoked — runtime skipped; tsc still type-checks the call signatures.
     // @ts-expect-error - options argument is required

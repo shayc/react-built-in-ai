@@ -7,7 +7,7 @@ export class BuiltInAIError extends Error {
   override name = "BuiltInAIError";
 }
 
-/** The built-in AI namespace (`Translator`, `Rewriter`, `Proofreader`) is not on `globalThis`. */
+/** The matching built-in AI namespace is not on `globalThis`. */
 export class UnsupportedError extends BuiltInAIError {
   override name = "UnsupportedError";
   constructor(
