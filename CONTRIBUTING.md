@@ -4,7 +4,7 @@ Thanks for your interest in contributing to `@shayc/react-built-in-ai`.
 
 ## Development
 
-Requires Node 24+.
+Requires Node 22+.
 
 ```bash
 npm install
@@ -15,7 +15,7 @@ Common commands:
 
 ```bash
 npm run lint        # eslint
-npm run typecheck   # tsc --noEmit
+npm run typecheck   # type-check only (noEmit via tsconfig)
 npm test            # vitest run (browser mode, chromium)
 npm run build       # tsdown → dist/
 ```
