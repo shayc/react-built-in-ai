@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
-  NoUserActivationError,
+  MissingUserActivationError,
   UnavailableError,
   UnsupportedError,
 } from "../../errors";
@@ -61,7 +61,7 @@ describe("createInstance", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  test("throws NoUserActivationError when downloadable without a user gesture", async () => {
+  test("throws MissingUserActivationError when downloadable without a user gesture", async () => {
     setUserActivation(false);
     const create = vi.fn();
     vi.stubGlobal(NAMESPACE, {
@@ -74,7 +74,7 @@ describe("createInstance", () => {
         name: NAMESPACE,
         options: { mode: "a" },
       }),
-    ).rejects.toBeInstanceOf(NoUserActivationError);
+    ).rejects.toBeInstanceOf(MissingUserActivationError);
     expect(create).not.toHaveBeenCalled();
   });
 

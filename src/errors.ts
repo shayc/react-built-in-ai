@@ -30,8 +30,8 @@ export class UnavailableError extends BuiltInAIError {
 }
 
 /** A download was required but no transient user activation was present. */
-export class NoUserActivationError extends BuiltInAIError {
-  override name = "NoUserActivationError";
+export class MissingUserActivationError extends BuiltInAIError {
+  override name = "MissingUserActivationError";
   constructor(
     message = "Built-in AI requires a user activation to download",
     options?: ErrorOptions,

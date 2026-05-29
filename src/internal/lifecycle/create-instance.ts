@@ -1,5 +1,5 @@
 import {
-  NoUserActivationError,
+  MissingUserActivationError,
   UnavailableError,
   UnsupportedError,
 } from "../../errors";
@@ -21,7 +21,7 @@ export interface CreateInstanceOptions<O extends object> {
   /** Cancels both the (optional) download and `namespace.create()`. */
   signal?: AbortSignal;
   /** Called on each `downloadprogress` event with `event.loaded` in `[0, 1]`. */
-  onProgress?: (loaded: number) => void;
+  onProgress?: (progress: number) => void;
 }
 
 /**
@@ -29,7 +29,7 @@ export interface CreateInstanceOptions<O extends object> {
  * user-activation check → `create()` with progress wiring → cleanup.
  *
  * Maps known conditions to typed errors (`UnsupportedError`,
- * `UnavailableError`, `NoUserActivationError`); browser `availability()` /
+ * `UnavailableError`, `MissingUserActivationError`); browser `availability()` /
  * `create()` rejections pass through unchanged. Writes download progress to the
  * shared store and clears it in `finally`. The returned instance is wrapped as
  * `AsyncDisposable` (a no-op if it already implements `[Symbol.asyncDispose]`).
@@ -54,7 +54,7 @@ export async function createInstance<
 
   const willDownload = availability !== "available";
   if (willDownload && !hasUserActivation()) {
-    throw new NoUserActivationError();
+    throw new MissingUserActivationError();
   }
 
   const key = willDownload ? buildProgressKey(name, options) : null;

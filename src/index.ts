@@ -1,7 +1,7 @@
 export {
   BuiltInAIError,
   NotReadyError,
-  NoUserActivationError,
+  MissingUserActivationError,
   UnavailableError,
   UnsupportedError,
 } from "./errors";

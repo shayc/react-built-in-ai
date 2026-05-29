@@ -38,7 +38,7 @@ On a fresh browser, the first click triggers the model download (gated by user a
 
 ## Features
 
-- **First-class TypeScript** — full `.d.mts` types and a `BuiltInAIError` hierarchy (`UnsupportedError`, `UnavailableError`, `NoUserActivationError`, `NotReadyError`) for narrow `catch` clauses.
+- **First-class TypeScript** — full `.d.mts` types and a `BuiltInAIError` hierarchy (`UnsupportedError`, `UnavailableError`, `MissingUserActivationError`, `NotReadyError`) for narrow `catch` clauses.
 - **`AsyncDisposable` instances** — use `await using` for automatic teardown; `.destroy()` stays exposed for callers that need to release earlier.
 - **Cross-instance download progress** — `useGlobalDownloadProgress()` aggregates in-flight downloads across every hook and creator for a single global progress UI.
 
@@ -92,7 +92,7 @@ Every hook exposes `status`, `progress`, `error`, and `prepare`. `status` is alw
 
 ## Usage
 
-Action methods are gated by the lifecycle — they throw `UnsupportedError`, `UnavailableError`, `NoUserActivationError`, or `NotReadyError` when the state forbids them. **A call rejected by the gate never mutates the hook's `status` or `error`.** (A call made from `idle` that triggers a download is not gate-rejected — it drives `status` through `downloading` to `ready` or `error` like `prepare()`.)
+Action methods are gated by the lifecycle — they throw `UnsupportedError`, `UnavailableError`, `MissingUserActivationError`, or `NotReadyError` when the state forbids them. **A call rejected by the gate never mutates the hook's `status` or `error`.** (A call made from `idle` that triggers a download is not gate-rejected — it drives `status` through `downloading` to `ready` or `error` like `prepare()`.)
 
 ```tsx
 function Demo() {
@@ -152,7 +152,7 @@ try {
 }
 ```
 
-Each `create*` mirrors the hook lifecycle exactly — same three typed errors (`UnsupportedError`, `UnavailableError`, `NoUserActivationError`), same progress wiring. Unlike with the hooks, **other browser rejections surface unchanged** — most commonly `AbortError` when `signal` fires, or `NetworkError` on a failed download. The `instanceof BuiltInAIError` check above is what separates the typed lifecycle errors from those pass-throughs.
+Each `create*` mirrors the hook lifecycle exactly — same three typed errors (`UnsupportedError`, `UnavailableError`, `MissingUserActivationError`), same progress wiring. Unlike with the hooks, **other browser rejections surface unchanged** — most commonly `AbortError` when `signal` fires, or `NetworkError` on a failed download. The `instanceof BuiltInAIError` check above is what separates the typed lifecycle errors from those pass-throughs.
 
 The returned instance is `AsyncDisposable` — prefer `await using` so it's released on scope exit. `.destroy()` is also exposed for callers that need to release earlier.
 
@@ -189,7 +189,7 @@ Lifecycle gating throws `BuiltInAIError` subclasses. Action methods (`translate`
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `UnsupportedError`      | The namespace is missing. Feature-detect with `isSupported()` and render a fallback.                                          |
 | `UnavailableError`      | The device can't run the model. Render a fallback; don't retry.                                                               |
-| `NoUserActivationError` | A download was needed without a user gesture. Trigger `prepare()` (or the first action) from a click/keypress handler.        |
+| `MissingUserActivationError` | A download was needed without a user gesture. Trigger `prepare()` (or the first action) from a click/keypress handler.        |
 | `NotReadyError`         | A prior `create()` failed. Call `prepare()` from a user activation to retry; inspect `error.cause` for the underlying reason. |
 
 ## Cancellation

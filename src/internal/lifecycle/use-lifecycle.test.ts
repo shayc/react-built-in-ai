@@ -11,7 +11,7 @@ import {
 import { renderHook } from "vitest-browser-react";
 import {
   BuiltInAIError,
-  NoUserActivationError,
+  MissingUserActivationError,
   NotReadyError,
   UnavailableError,
   UnsupportedError,
@@ -150,7 +150,7 @@ describe("useLifecycle", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  test("prepare() rejects with NoUserActivationError when idle without activation", async () => {
+  test("prepare() rejects with MissingUserActivationError when idle without activation", async () => {
     const { Fake } = makeAIFake({
       status: "downloadable",
       buildInstance,
@@ -164,7 +164,7 @@ describe("useLifecycle", () => {
     await vi.waitFor(() => expect(result.current.status).toBe("idle"));
 
     await expect(result.current.prepare()).rejects.toBeInstanceOf(
-      NoUserActivationError,
+      MissingUserActivationError,
     );
   });
 
@@ -550,7 +550,7 @@ describe("useLifecycle", () => {
     expect(create).toHaveBeenCalledTimes(1);
   });
 
-  test("acquire() rejects with NoUserActivationError when idle without activation", async () => {
+  test("acquire() rejects with MissingUserActivationError when idle without activation", async () => {
     const { Fake } = makeAIFake({
       status: "downloadable",
       buildInstance,
@@ -564,7 +564,7 @@ describe("useLifecycle", () => {
     await vi.waitFor(() => expect(result.current.status).toBe("idle"));
 
     await expect(result.current.acquire()).rejects.toBeInstanceOf(
-      NoUserActivationError,
+      MissingUserActivationError,
     );
   });
 
