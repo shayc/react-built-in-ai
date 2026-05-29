@@ -148,7 +148,7 @@ try {
   const text = await translator.translate(input);
 } catch (error) {
   if (!(error instanceof BuiltInAIError)) throw error;
-  // unsupported / unavailable / no-activation — render a fallback.
+  // unsupported / unavailable / missing-activation — render a fallback.
 }
 ```
 
