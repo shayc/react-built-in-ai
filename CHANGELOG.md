@@ -1,5 +1,13 @@
 # @shayc/react-built-in-ai
 
+## 0.4.0
+
+### Minor Changes
+
+- 98aba7b: Rename the `NoUserActivationError` class to `MissingUserActivationError`. The new name keeps the "missing thing" meaning while aligning with its sibling adjective-style names (`UnsupportedError`, `UnavailableError`).
+
+  **Breaking:** update any `import`, `instanceof`, or `catch` checks that reference `NoUserActivationError`.
+
 ## 0.3.3
 
 ### Patch Changes
