@@ -5,8 +5,8 @@ import type { BaseHookReturn } from "../types";
 
 /**
  * Options for {@link useTranslator}. Mirrors `Translator.create()` minus the
- * hook-managed `signal` and `monitor`. Compared shallowly — changing either
- * language re-enters the lifecycle for the new pair.
+ * hook-managed `signal` and `monitor`. Compared shallowly — changing
+ * `sourceLanguage` or `targetLanguage` re-enters the lifecycle for the new pair.
  *
  * @see https://developer.chrome.com/docs/ai/translator-api
  */

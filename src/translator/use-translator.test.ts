@@ -39,14 +39,15 @@ describe("useTranslator", () => {
     await vi.waitFor(() => expect(result.current.status).toBe("ready"));
 
     const chunks: string[] = [];
-    for await (const c of result.current.translateStream("anything")) {
-      chunks.push(c);
+    for await (const chunk of result.current.translateStream("anything")) {
+      chunks.push(chunk);
     }
     expect(chunks).toEqual(["T:", "hello"]);
   });
 
   test("requires a TranslatorOptions argument (compile-time)", () => {
-    // Arrows are never invoked — runtime skipped; tsc still type-checks the call signatures.
+    // These arrows are never executed; tsc type-checks the calls statically,
+    // verifying the options argument is required (both missing and undefined are rejected).
     // @ts-expect-error - options argument is required
     void (() => useTranslator());
     // @ts-expect-error - options argument is not optional

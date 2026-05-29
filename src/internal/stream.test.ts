@@ -51,8 +51,9 @@ describe("streamChunks", () => {
 
   test("cancels the underlying source and releases the lock when the signal aborts mid-stream", async () => {
     // Stream emits one chunk, then hangs in `pull` so the next read is pending at abort.
-    // `cancel` records the reason for assertion.
-    let cancelReason: unknown = "<<never>>";
+    // `cancel` records the reason for assertion; this sentinel stands in until then.
+    const NOT_CANCELLED = Symbol("not-cancelled");
+    let cancelReason: unknown = NOT_CANCELLED;
     const stream = new ReadableStream<string>({
       start(controller) {
         controller.enqueue("first");
