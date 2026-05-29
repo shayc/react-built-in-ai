@@ -275,15 +275,7 @@ export function createStore<
     };
   };
 
-  // Warm up only — never tears down. From an errored lifecycle this rejects
-  // with NotReadyError; use retry() to reset and try again.
   const prepare = async (): Promise<void> => {
-    await ensureReady();
-  };
-
-  // Recover from a failed lifecycle: reset the errored epoch, then warm up.
-  // A no-op reset elsewhere — from any non-error state this is just prepare().
-  const retry = async (): Promise<void> => {
     if (state.kind === "error") {
       start(options);
     }
@@ -317,7 +309,6 @@ export function createStore<
     start,
     stop,
     prepare,
-    retry,
     acquire,
   };
 }
