@@ -28,11 +28,6 @@ interface ProvisionOptions {
   showDownloadUI: boolean;
 }
 
-/**
- * Internal state machine. Each variant owns exactly the data meaningful in its
- * state, so `state.kind === "ready"` implies a live `instance` by construction
- * — there are no parallel `instance`/`activeTask` variables to keep in sync.
- */
 type InternalState<Model> =
   | { kind: "idle"; probe: Promise<void> }
   | { kind: "downloading"; progress: number; task: Promise<void> }
@@ -41,7 +36,6 @@ type InternalState<Model> =
   | { kind: "unavailable" }
   | { kind: "error"; error: BuiltInAIError };
 
-/** Projects internal state onto the public {@link Snapshot}. Pure. */
 function toSnapshot<Model>(state: InternalState<Model>): Snapshot {
   switch (state.kind) {
     case "downloading":
@@ -113,7 +107,6 @@ export function createStore<
     }
   }
 
-  /** Single choke point for state changes. */
   function transition(next: InternalState<Model>): void {
     state = next;
     notify();
@@ -129,11 +122,6 @@ export function createStore<
     return projection;
   }
 
-  /**
-   * Probe availability on start. If the model is already local we auto-provision
-   * (no "downloading" UI flash); otherwise we settle into the matching state
-   * and wait for a user-initiated provision via prepare/acquire.
-   */
   async function checkAvailability(signal: AbortSignal): Promise<void> {
     if (!namespace) {
       return;
@@ -158,11 +146,6 @@ export function createStore<
     }
   }
 
-  /**
-   * Kick off instance creation. `showDownloadUI` flips to "downloading"
-   * (carrying the task) for user triggers; the silent path stays "idle" until
-   * the model lands as "ready".
-   */
   function provision(
     signal: AbortSignal,
     { showDownloadUI }: ProvisionOptions,
@@ -202,8 +185,6 @@ export function createStore<
       if (signal.aborted) {
         return;
       }
-      // Map the primitive's typed rejections back to terminal states;
-      // only genuine create failures land in "error".
       if (error instanceof UnsupportedError) {
         transition({ kind: "unsupported" });
       } else if (error instanceof UnavailableError) {
@@ -214,7 +195,6 @@ export function createStore<
     }
   }
 
-  /** Await an in-flight task, surfacing only caller/epoch aborts. */
   async function awaitTask(
     task: Promise<void>,
     callerSignal: AbortSignal | undefined,
@@ -226,15 +206,9 @@ export function createStore<
       if (merged.aborted) {
         throw error;
       }
-      // Underlying rejections settle into a terminal state; only aborts surface.
     }
   }
 
-  /**
-   * Drive the machine to "ready" or throw. Terminal kinds resolve/throw;
-   * transient kinds await their task and re-dispatch. Each "idle" pass either
-   * kicks off or throws, so the loop always terminates.
-   */
   async function ensureReady(callerSignal?: AbortSignal): Promise<void> {
     while (true) {
       const s = state;
@@ -262,7 +236,6 @@ export function createStore<
     }
   }
 
-  /** Begin a user-initiated download. Synchronously flips state to "downloading". */
   function kickoff(): void {
     if (!hasUserActivation()) {
       throw new NoUserActivationError();
@@ -296,8 +269,6 @@ export function createStore<
     if (state.kind === "ready") {
       destroyQuietly(state.instance);
     }
-    // Clear the now-dead epoch's state so a retained acquire/prepare can't read
-    // a stale "ready"/"downloading"; the aborted controller makes them reject.
     transition({ kind: "idle", probe: Promise.resolve() });
   }
 
@@ -309,8 +280,6 @@ export function createStore<
   };
 
   const prepare = async (): Promise<void> => {
-    // Re-entry from "error" clears and restarts the chain once; landing back
-    // in "error" rejects — no retry loop.
     if (state.kind === "error") {
       start(namespace, options);
     }

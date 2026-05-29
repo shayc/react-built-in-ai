@@ -31,8 +31,9 @@ export function clearDownloadProgress(key: string): void {
 
 /**
  * Highest progress among matching keys, or `null` when none are in flight.
- * `null` (not `0`) distinguishes "nothing downloading" from "started at 0%" —
- * the max of an empty set is absent, not zero.
+ * `null` (not `0`) tells "nothing downloading" apart from "just started at 0%".
+ *
+ * @internal
  */
 export function snapshotProgressFor(prefix: string | undefined): number | null {
   const sep = prefix === undefined ? undefined : `${prefix}:`;
@@ -50,6 +51,8 @@ export function snapshotProgressFor(prefix: string | undefined): number | null {
  * Stable progress-store key for an instance distinguished by `options`. Keys
  * are sorted before JSON encoding so insertion order doesn't shard the same
  * logical options into separate entries.
+ *
+ * @internal
  */
 export function buildProgressKey(
   globalName: string,

@@ -1,4 +1,8 @@
-/** `ReadableStream<string>` that emits `chunks` in order then closes. */
+/**
+ * `ReadableStream<string>` that emits `chunks` in order then closes.
+ *
+ * @internal
+ */
 export function makeChunkStream(
   chunks: readonly string[],
 ): ReadableStream<string> {

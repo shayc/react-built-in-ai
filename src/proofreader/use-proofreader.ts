@@ -3,8 +3,9 @@ import { useLifecycle } from "../internal/lifecycle/use-lifecycle";
 import type { BaseHookReturn } from "../types";
 
 /**
- * Options for {@link useProofreader}. Mirrors `Proofreader.create()`. Compared
- * shallowly — memoize `expectedInputLanguages` to avoid spurious re-creation.
+ * Options for {@link useProofreader}. Mirrors `Proofreader.create()` minus the
+ * hook-managed `signal` and `monitor`. Compared shallowly — memoize
+ * `expectedInputLanguages` to avoid spurious re-creation.
  *
  * @see https://developer.chrome.com/docs/ai/proofreader-api
  */

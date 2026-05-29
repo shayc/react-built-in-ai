@@ -16,6 +16,8 @@ export interface MakeAIFakeOptions<I> {
 /**
  * Minimal fake for any built-in AI namespace — common path only. Tests needing
  * exotic timing (manual create resolution, monitor wiring, etc.) compose inline.
+ *
+ * @internal
  */
 export function makeAIFake<I>({
   status = "available",
