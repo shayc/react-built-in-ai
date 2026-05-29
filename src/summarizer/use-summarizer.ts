@@ -74,7 +74,7 @@ export interface SummarizerHookReturn extends BaseHookReturn {
 export function useSummarizer(
   options?: SummarizerOptions,
 ): SummarizerHookReturn {
-  const { status, progress, error, prepare, inputQuota, acquire } =
+  const { status, progress, error, prepare, retry, inputQuota, acquire } =
     useLifecycle<SummarizerOptions, Summarizer>(
       "Summarizer",
       options,
@@ -106,5 +106,5 @@ export function useSummarizer(
     },
   }));
 
-  return { status, progress, error, prepare, inputQuota, ...actions };
+  return { status, progress, error, prepare, retry, inputQuota, ...actions };
 }

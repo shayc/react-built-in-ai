@@ -73,7 +73,7 @@ export interface LanguageDetectorHookReturn extends BaseHookReturn {
 export function useLanguageDetector(
   options?: LanguageDetectorOptions,
 ): LanguageDetectorHookReturn {
-  const { status, progress, error, prepare, inputQuota, acquire } =
+  const { status, progress, error, prepare, retry, inputQuota, acquire } =
     useLifecycle<LanguageDetectorOptions, LanguageDetector>(
       "LanguageDetector",
       options,
@@ -94,5 +94,5 @@ export function useLanguageDetector(
     },
   }));
 
-  return { status, progress, error, prepare, inputQuota, ...actions };
+  return { status, progress, error, prepare, retry, inputQuota, ...actions };
 }

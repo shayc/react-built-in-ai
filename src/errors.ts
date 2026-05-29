@@ -33,7 +33,7 @@ export class UnavailableError extends BuiltInAIError {
 export class MissingUserActivationError extends BuiltInAIError {
   override name = "MissingUserActivationError";
   constructor(
-    message = "Built-in AI requires a user activation to download",
+    message = "Built-in AI must download the model, which the browser only allows during a user gesture. Call prepare() (or the action) from a click or keypress handler before invoking it from an effect or timer.",
     options?: ErrorOptions,
   ) {
     super(message, options);
