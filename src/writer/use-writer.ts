@@ -74,25 +74,25 @@ export function useWriter(options?: WriterOptions): WriterHookReturn {
     );
 
   const [actions] = useState(() => ({
-    async write(input: string, options?: WriteCallOptions) {
-      const { instance, signal } = await acquire(options?.signal);
-      return instance.write(input, { context: options?.context, signal });
+    async write(input: string, opts?: WriteCallOptions) {
+      const { instance, signal } = await acquire(opts?.signal);
+      return instance.write(input, { context: opts?.context, signal });
     },
     async *writeStream(
       input: string,
-      options?: WriteCallOptions,
+      opts?: WriteCallOptions,
     ): AsyncIterable<string> {
-      const { instance, signal } = await acquire(options?.signal);
+      const { instance, signal } = await acquire(opts?.signal);
       const stream = instance.writeStreaming(input, {
-        context: options?.context,
+        context: opts?.context,
         signal,
       });
       yield* streamChunks(stream, signal);
     },
-    async measureInput(input: string, options?: WriteCallOptions) {
-      const { instance, signal } = await acquire(options?.signal);
+    async measureInput(input: string, opts?: WriteCallOptions) {
+      const { instance, signal } = await acquire(opts?.signal);
       return instance.measureInputUsage(input, {
-        context: options?.context,
+        context: opts?.context,
         signal,
       });
     },
