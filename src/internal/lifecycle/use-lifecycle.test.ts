@@ -208,7 +208,7 @@ describe("useLifecycle", () => {
     await vi.waitFor(() => expect(result.current.status).toBe("idle"));
 
     setUserActivation(true);
-    // Swallow rejection — unmount in afterEach aborts the in-flight prepare.
+    // Fire-and-forget to reach "downloading"; teardown aborts it — swallow.
     result.current.prepare().catch(() => undefined);
     await vi.waitFor(() => expect(result.current.status).toBe("downloading"));
 
@@ -403,7 +403,7 @@ describe("useLifecycle", () => {
     await vi.waitFor(() => expect(result.current.status).toBe("idle"));
 
     setUserActivation(true);
-    // Unmount will abort this prepare with "lifecycle reset" — swallow to silence the rejection.
+    // Fire-and-forget to reach "downloading"; teardown aborts it — swallow.
     result.current.prepare().catch(() => undefined);
     await vi.waitFor(() => expect(result.current.status).toBe("downloading"));
 
@@ -581,6 +581,31 @@ describe("useLifecycle", () => {
     await vi.waitFor(() => expect(result.current.status).toBe("ready"));
 
     // Capture pre-unmount — `result.current` goes stale; `store.acquire` stays stable.
+    const acquire = result.current.acquire;
+    await unmount();
+
+    await expect(acquire()).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  test("acquire() retained across an unmount mid-download rejects with AbortError", async () => {
+    const create = vi.fn(() => new Promise<TestInstance>(() => undefined));
+    vi.stubGlobal(NAMESPACE, {
+      availability: vi.fn(() => Promise.resolve("downloadable")),
+      create,
+    });
+
+    const { result, unmount } = await renderHook(() =>
+      useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
+    );
+    await vi.waitFor(() => expect(result.current.status).toBe("idle"));
+
+    setUserActivation(true);
+    // Fire-and-forget to reach "downloading"; the unmount below aborts it — swallow.
+    result.current.prepare().catch(() => undefined);
+    await vi.waitFor(() => expect(result.current.status).toBe("downloading"));
+
+    // Unmounting mid-download must yield a typed AbortError to a retained
+    // acquire — never a raw "unexpected lifecycle state" throw.
     const acquire = result.current.acquire;
     await unmount();
 

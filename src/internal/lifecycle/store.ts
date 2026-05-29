@@ -28,12 +28,47 @@ interface ProvisionOptions {
   showDownloadUI: boolean;
 }
 
-const INITIAL_SNAPSHOT: Snapshot = {
-  status: "idle",
-  progress: 0,
-  error: null,
-  inputQuota: 0,
-};
+/**
+ * Internal state machine. Each variant owns exactly the data meaningful in its
+ * state, so `state.kind === "ready"` implies a live `instance` by construction
+ * — there are no parallel `instance`/`activeTask` variables to keep in sync.
+ */
+type InternalState<Model> =
+  | { kind: "idle"; probe: Promise<void> }
+  | { kind: "downloading"; progress: number; task: Promise<void> }
+  | { kind: "ready"; instance: Model; inputQuota: number }
+  | { kind: "unsupported" }
+  | { kind: "unavailable" }
+  | { kind: "error"; error: BuiltInAIError };
+
+/** Projects internal state onto the public {@link Snapshot}. Pure. */
+function toSnapshot<Model>(state: InternalState<Model>): Snapshot {
+  switch (state.kind) {
+    case "downloading":
+      return {
+        status: "downloading",
+        progress: state.progress,
+        error: null,
+        inputQuota: 0,
+      };
+    case "ready":
+      return {
+        status: "ready",
+        progress: 0,
+        error: null,
+        inputQuota: state.inputQuota,
+      };
+    case "error":
+      return {
+        status: "error",
+        progress: 0,
+        error: state.error,
+        inputQuota: 0,
+      };
+    default:
+      return { status: state.kind, progress: 0, error: null, inputQuota: 0 };
+  }
+}
 
 function wrap(error: unknown): BuiltInAIError {
   if (error instanceof BuiltInAIError) {
@@ -60,14 +95,17 @@ export function createStore<
   Options extends object,
   Model extends DestroyableModel,
 >(globalName: BuiltInAIName, readQuota: (instance: Model) => number = () => 0) {
-  let snapshot: Snapshot = INITIAL_SNAPSHOT;
   const listeners = new Set<() => void>();
 
+  // Epoch context, orthogonal to `state` — reset wholesale by start/stop. The
+  // controller's identity is the generation token acquire() checks after awaiting.
   let namespace: AINamespace<Options, Model> | undefined;
   let options: Options | undefined;
-  let instance: Model | null = null;
   let abortController = new AbortController();
-  let activeTask: Promise<void> | null = null;
+
+  let state: InternalState<Model> = { kind: "idle", probe: Promise.resolve() };
+  let projectedFrom: InternalState<Model> = state;
+  let projection: Snapshot = toSnapshot(state);
 
   function notify(): void {
     for (const listener of listeners) {
@@ -75,16 +113,20 @@ export function createStore<
     }
   }
 
-  function update(patch: Partial<Snapshot>): void {
-    snapshot = { ...snapshot, ...patch };
+  /** Single choke point for state changes. */
+  function transition(next: InternalState<Model>): void {
+    state = next;
     notify();
   }
 
-  function fail(
-    status: "unsupported" | "unavailable" | "error",
-    error: BuiltInAIError | null = null,
-  ): void {
-    update({ status, progress: 0, error });
+  // `useSyncExternalStore` requires a referentially stable snapshot between
+  // changes; recompute the projection only when `state` identity changes.
+  function getSnapshot(): Snapshot {
+    if (state !== projectedFrom) {
+      projectedFrom = state;
+      projection = toSnapshot(state);
+    }
+    return projection;
   }
 
   /**
@@ -102,7 +144,7 @@ export function createStore<
         return;
       }
       if (availability === "unavailable") {
-        fail("unavailable");
+        transition({ kind: "unavailable" });
         return;
       }
       if (availability === "available") {
@@ -112,23 +154,27 @@ export function createStore<
       if (signal.aborted) {
         return;
       }
-      fail("error", wrap(error));
+      transition({ kind: "error", error: wrap(error) });
     }
   }
 
   /**
-   * Create the underlying instance. `showDownloadUI` flips status to
-   * "downloading" first — used for user-initiated triggers where progress
-   * matters; the silent path keeps an "available" model on "idle" until it
-   * lands as "ready".
+   * Kick off instance creation. `showDownloadUI` flips to "downloading"
+   * (carrying the task) for user triggers; the silent path stays "idle" until
+   * the model lands as "ready".
    */
-  async function provision(
+  function provision(
     signal: AbortSignal,
     { showDownloadUI }: ProvisionOptions,
   ): Promise<void> {
+    const task = runProvision(signal);
     if (showDownloadUI) {
-      update({ status: "downloading", progress: 0 });
+      transition({ kind: "downloading", progress: 0, task });
     }
+    return task;
+  }
+
+  async function runProvision(signal: AbortSignal): Promise<void> {
     try {
       const created = await createInstance<Options, Model>({
         name: globalName,
@@ -138,18 +184,18 @@ export function createStore<
           if (signal.aborted) {
             return;
           }
-          update({ progress: loaded });
+          if (state.kind === "downloading") {
+            transition({ ...state, progress: loaded });
+          }
         },
       });
       if (signal.aborted) {
         destroyQuietly(created);
         return;
       }
-      instance = created;
-      update({
-        status: "ready",
-        progress: 0,
-        error: null,
+      transition({
+        kind: "ready",
+        instance: created,
         inputQuota: readQuota(created),
       });
     } catch (error) {
@@ -159,63 +205,69 @@ export function createStore<
       // Map the primitive's typed rejections back to terminal states;
       // only genuine create failures land in "error".
       if (error instanceof UnsupportedError) {
-        fail("unsupported");
+        transition({ kind: "unsupported" });
       } else if (error instanceof UnavailableError) {
-        fail("unavailable");
+        transition({ kind: "unavailable" });
       } else {
-        fail("error", wrap(error));
+        transition({ kind: "error", error: wrap(error) });
       }
     }
   }
 
-  async function awaitActiveTask(
+  /** Await an in-flight task, surfacing only caller/epoch aborts. */
+  async function awaitTask(
+    task: Promise<void>,
     callerSignal: AbortSignal | undefined,
   ): Promise<void> {
-    if (!activeTask) {
-      return;
-    }
     const merged = mergeSignals(abortController.signal, callerSignal);
     try {
-      await raceAbort(activeTask, merged);
+      await raceAbort(task, merged);
     } catch (error) {
       if (merged.aborted) {
         throw error;
       }
-      // Underlying rejections settle into snapshot.error; only caller-aborts surface here.
+      // Underlying rejections settle into a terminal state; only aborts surface.
     }
   }
 
+  /**
+   * Drive the machine to "ready" or throw. Terminal kinds resolve/throw;
+   * transient kinds await their task and re-dispatch. Each "idle" pass either
+   * kicks off or throws, so the loop always terminates.
+   */
   async function ensureReady(callerSignal?: AbortSignal): Promise<void> {
-    // 1. Background availability check may be in flight — wait it out.
-    if (snapshot.status === "idle") {
-      await awaitActiveTask(callerSignal);
-    }
-
-    // 2. Still idle means the model needs a user-initiated provision.
-    if (snapshot.status === "idle") {
-      if (!hasUserActivation()) {
-        throw new NoUserActivationError();
+    while (true) {
+      const s = state;
+      switch (s.kind) {
+        case "ready":
+          return;
+        case "unsupported":
+          throw new UnsupportedError();
+        case "unavailable":
+          throw new UnavailableError();
+        case "error":
+          throw new NotReadyError(s.error.cause);
+        case "downloading":
+          await awaitTask(s.task, callerSignal);
+          continue;
+        case "idle":
+          await awaitTask(s.probe, callerSignal);
+          // Re-read live state: a concurrent caller may have kicked off already,
+          // so a single create() is shared rather than duplicated.
+          if (state.kind === "idle") {
+            kickoff();
+          }
+          continue;
       }
-      activeTask = provision(abortController.signal, { showDownloadUI: true });
     }
+  }
 
-    // 3. Provision in flight (ours, or a concurrent caller's) — wait it out.
-    if (snapshot.status === "downloading") {
-      await awaitActiveTask(callerSignal);
+  /** Begin a user-initiated download. Synchronously flips state to "downloading". */
+  function kickoff(): void {
+    if (!hasUserActivation()) {
+      throw new NoUserActivationError();
     }
-
-    // 4. Whatever terminal state we landed in: return or throw.
-    switch (snapshot.status) {
-      case "ready":
-        return;
-      case "unsupported":
-        throw new UnsupportedError();
-      case "unavailable":
-        throw new UnavailableError();
-      case "error":
-        throw new NotReadyError(snapshot.error?.cause);
-    }
-    throw new Error(`Unexpected lifecycle state: ${snapshot.status}`);
+    void provision(abortController.signal, { showDownloadUI: true });
   }
 
   function start(
@@ -224,23 +276,29 @@ export function createStore<
   ): void {
     abortController.abort(abortError("lifecycle reset"));
     abortController = new AbortController();
+    if (state.kind === "ready") {
+      destroyQuietly(state.instance);
+    }
     namespace = nextNamespace;
     options = nextOptions;
-    destroyQuietly(instance);
-    instance = null;
-    snapshot = {
-      ...INITIAL_SNAPSHOT,
-      status: nextNamespace ? "idle" : "unsupported",
-    };
-    notify();
-    activeTask = checkAvailability(abortController.signal);
+    if (!nextNamespace) {
+      transition({ kind: "unsupported" });
+      return;
+    }
+    transition({
+      kind: "idle",
+      probe: checkAvailability(abortController.signal),
+    });
   }
 
   function stop(): void {
     abortController.abort(abortError("lifecycle unmounted"));
-    activeTask = null;
-    destroyQuietly(instance);
-    instance = null;
+    if (state.kind === "ready") {
+      destroyQuietly(state.instance);
+    }
+    // Clear the now-dead epoch's state so a retained acquire/prepare can't read
+    // a stale "ready"/"downloading"; the aborted controller makes them reject.
+    transition({ kind: "idle", probe: Promise.resolve() });
   }
 
   const subscribe = (listener: () => void): (() => void) => {
@@ -253,7 +311,7 @@ export function createStore<
   const prepare = async (): Promise<void> => {
     // Re-entry from "error" clears and restarts the chain once; landing back
     // in "error" rejects — no retry loop.
-    if (snapshot.status === "error") {
+    if (state.kind === "error") {
       start(namespace, options);
     }
     await ensureReady();
@@ -262,21 +320,27 @@ export function createStore<
   const acquire = async (
     callerSignal?: AbortSignal,
   ): Promise<Acquired<Model>> => {
+    const epoch = abortController;
     await ensureReady(callerSignal);
-    const merged = mergeSignals(abortController.signal, callerSignal);
+    // start() during the await installs a fresh controller — a different
+    // identity means our generation was reset out from under us (config change).
+    if (epoch !== abortController) {
+      throw new NotReadyError();
+    }
+    const merged = mergeSignals(epoch.signal, callerSignal);
     if (merged.aborted) {
       throw merged.reason;
     }
-    // start()/stop() during the await nulls instance under a fresh (unaborted) controller.
-    if (!instance) {
+    // Provably "ready" in an unchanged epoch; the guard narrows `state.instance`.
+    if (state.kind !== "ready") {
       throw new NotReadyError();
     }
-    return { instance, signal: merged };
+    return { instance: state.instance, signal: merged };
   };
 
   return {
     subscribe,
-    getSnapshot: () => snapshot,
+    getSnapshot,
     start,
     stop,
     prepare,
