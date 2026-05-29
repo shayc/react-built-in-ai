@@ -10,7 +10,7 @@ import type { Status } from "../../types";
 import { abortError, mergeSignals, raceAbort } from "../signal";
 import { hasUserActivation } from "../user-activation";
 import { createInstance } from "./create-instance";
-import type { AINamespace } from "./types";
+import { getNamespace, type AINamespace } from "./types";
 
 export interface Snapshot {
   status: Status;
@@ -93,7 +93,6 @@ export function createStore<
 
   // Epoch context, orthogonal to `state` — reset wholesale by start/stop. The
   // controller's identity is the generation token acquire() checks after awaiting.
-  let namespace: AINamespace<Options, Model> | undefined;
   let options: Options | undefined;
   let abortController = new AbortController();
 
@@ -122,10 +121,10 @@ export function createStore<
     return projection;
   }
 
-  async function checkAvailability(signal: AbortSignal): Promise<void> {
-    if (!namespace) {
-      return;
-    }
+  async function checkAvailability(
+    namespace: AINamespace<Options, Model>,
+    signal: AbortSignal,
+  ): Promise<void> {
     try {
       const availability = await namespace.availability(options);
       if (signal.aborted) {
@@ -243,24 +242,21 @@ export function createStore<
     void provision(abortController.signal, { showDownloadUI: true });
   }
 
-  function start(
-    nextNamespace: AINamespace<Options, Model> | undefined,
-    nextOptions: Options | undefined,
-  ): void {
+  function start(nextOptions: Options | undefined): void {
     abortController.abort(abortError("lifecycle reset"));
     abortController = new AbortController();
     if (state.kind === "ready") {
       destroyQuietly(state.instance);
     }
-    namespace = nextNamespace;
     options = nextOptions;
-    if (!nextNamespace) {
+    const namespace = getNamespace<Options, Model>(globalName);
+    if (!namespace) {
       transition({ kind: "unsupported" });
       return;
     }
     transition({
       kind: "idle",
-      probe: checkAvailability(abortController.signal),
+      probe: checkAvailability(namespace, abortController.signal),
     });
   }
 
@@ -281,7 +277,7 @@ export function createStore<
 
   const prepare = async (): Promise<void> => {
     if (state.kind === "error") {
-      start(namespace, options);
+      start(options);
     }
     await ensureReady();
   };
