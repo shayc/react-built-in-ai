@@ -69,7 +69,6 @@ export function useLifecycle<
     error: snapshot.error,
     inputQuota: snapshot.inputQuota,
     prepare: store.prepare,
-    retry: store.retry,
     acquire: store.acquire,
   };
 }

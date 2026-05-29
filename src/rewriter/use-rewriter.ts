@@ -69,7 +69,7 @@ export interface RewriterHookReturn extends BaseHookReturn {
  * ```
  */
 export function useRewriter(options?: RewriterOptions): RewriterHookReturn {
-  const { status, progress, error, prepare, retry, inputQuota, acquire } =
+  const { status, progress, error, prepare, inputQuota, acquire } =
     useLifecycle<RewriterOptions, Rewriter>(
       "Rewriter",
       options,
@@ -101,5 +101,5 @@ export function useRewriter(options?: RewriterOptions): RewriterHookReturn {
     },
   }));
 
-  return { status, progress, error, prepare, retry, inputQuota, ...actions };
+  return { status, progress, error, prepare, inputQuota, ...actions };
 }

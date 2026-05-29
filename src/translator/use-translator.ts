@@ -74,7 +74,7 @@ export interface TranslatorHookReturn extends BaseHookReturn {
 export function useTranslator(
   options: TranslatorOptions,
 ): TranslatorHookReturn {
-  const { status, progress, error, prepare, retry, inputQuota, acquire } =
+  const { status, progress, error, prepare, inputQuota, acquire } =
     useLifecycle<TranslatorOptions, Translator>(
       "Translator",
       options,
@@ -100,5 +100,5 @@ export function useTranslator(
     },
   }));
 
-  return { status, progress, error, prepare, retry, inputQuota, ...actions };
+  return { status, progress, error, prepare, inputQuota, ...actions };
 }
