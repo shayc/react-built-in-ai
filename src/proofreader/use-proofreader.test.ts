@@ -12,10 +12,10 @@ describe("useProofreader", () => {
     const { result } = await renderHook(() => useProofreader());
     await vi.waitFor(() => expect(result.current.status).toBe("ready"));
 
-    const out = await result.current.proofread("helo world");
-    expect(out.correctedInput).toBe("corrected(helo world)");
-    expect(out.corrections).toHaveLength(1);
-    expect(out.corrections[0]).toMatchObject({
+    const proofreadResult = await result.current.proofread("helo world");
+    expect(proofreadResult.correctedInput).toBe("corrected(helo world)");
+    expect(proofreadResult.corrections).toHaveLength(1);
+    expect(proofreadResult.corrections[0]).toMatchObject({
       startIndex: 0,
       endIndex: 5,
       correction: "Hello",
@@ -23,13 +23,14 @@ describe("useProofreader", () => {
   });
 
   test("omits inputQuota and measureInput (compile-time)", () => {
-    // Arrow is never invoked — runtime skipped; tsc still type-checks the accesses.
+    // This arrow is never executed; tsc type-checks the accesses statically,
+    // verifying inputQuota and measureInput are omitted from the return type.
     void (() => {
-      const ret = useProofreader();
+      const proofreader = useProofreader();
       // @ts-expect-error - inputQuota is not part of ProofreaderHookReturn
-      void ret.inputQuota;
+      void proofreader.inputQuota;
       // @ts-expect-error - measureInput is not part of ProofreaderHookReturn
-      void ret.measureInput;
+      void proofreader.measureInput;
     });
   });
 });

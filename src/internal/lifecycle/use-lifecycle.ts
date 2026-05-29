@@ -2,7 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import type { BuiltInAIName } from "../../is-supported";
 import { createStore } from "./store";
 
-function shallowEqualOptions<T extends object>(
+function shallowEqual<T extends object>(
   a: T | undefined,
   b: T | undefined,
 ): boolean {
@@ -30,7 +30,7 @@ function useStableOptions<T extends object>(
   options: T | undefined,
 ): T | undefined {
   const [stable, setStable] = useState(options);
-  if (!shallowEqualOptions(stable, options)) {
+  if (!shallowEqual(stable, options)) {
     setStable(options);
   }
   return stable;

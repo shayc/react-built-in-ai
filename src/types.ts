@@ -27,7 +27,7 @@ export interface BaseHookReturn {
    * if a download may be required.
    *
    * @throws A {@link BuiltInAIError} subclass — `UnsupportedError`,
-   * `UnavailableError`, `NoUserActivationError`, or `NotReadyError`.
+   * `UnavailableError`, `MissingUserActivationError`, or `NotReadyError`.
    */
   prepare: () => Promise<void>;
 }

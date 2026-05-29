@@ -49,7 +49,7 @@ export function snapshotProgressFor(prefix: string | undefined): number | null {
 
 /**
  * Stable progress-store key for an instance distinguished by `options`. Keys
- * are sorted before JSON encoding so insertion order doesn't shard the same
+ * are sorted before JSON encoding so insertion order doesn't split the same
  * logical options into separate entries.
  *
  * @internal

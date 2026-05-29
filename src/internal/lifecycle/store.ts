@@ -1,6 +1,6 @@
 import {
   BuiltInAIError,
-  NoUserActivationError,
+  MissingUserActivationError,
   NotReadyError,
   UnavailableError,
   UnsupportedError,
@@ -162,12 +162,12 @@ export function createStore<
         name: globalName,
         options,
         signal,
-        onProgress: (loaded) => {
+        onProgress: (progress) => {
           if (signal.aborted) {
             return;
           }
           if (state.kind === "downloading") {
-            transition({ ...state, progress: loaded });
+            transition({ ...state, progress });
           }
         },
       });
@@ -210,8 +210,8 @@ export function createStore<
 
   async function ensureReady(callerSignal?: AbortSignal): Promise<void> {
     while (true) {
-      const s = state;
-      switch (s.kind) {
+      const current = state;
+      switch (current.kind) {
         case "ready":
           return;
         case "unsupported":
@@ -219,12 +219,12 @@ export function createStore<
         case "unavailable":
           throw new UnavailableError();
         case "error":
-          throw new NotReadyError(s.error.cause);
+          throw new NotReadyError(current.error.cause);
         case "downloading":
-          await awaitTask(s.task, callerSignal);
+          await awaitTask(current.task, callerSignal);
           continue;
         case "idle":
-          await awaitTask(s.probe, callerSignal);
+          await awaitTask(current.probe, callerSignal);
           // Re-read live state: a concurrent caller may have kicked off already,
           // so a single create() is shared rather than duplicated.
           if (state.kind === "idle") {
@@ -237,7 +237,7 @@ export function createStore<
 
   function kickoff(): void {
     if (!hasUserActivation()) {
-      throw new NoUserActivationError();
+      throw new MissingUserActivationError();
     }
     void provision(abortController.signal, { showDownloadUI: true });
   }

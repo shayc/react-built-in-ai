@@ -16,7 +16,7 @@ export interface CreateTranslatorOptions extends TranslatorOptions {
  * hook.
  *
  * Throws {@link UnsupportedError}, {@link UnavailableError}, or
- * {@link NoUserActivationError} — call from a user-activation handler when a
+ * {@link MissingUserActivationError} — call from a user-activation handler when a
  * download may be required, or pre-warm via {@link useTranslator}. Other
  * browser rejections (e.g. `AbortError` when `signal` fires, `NetworkError`
  * on download failure) surface unchanged; use `instanceof BuiltInAIError` to
