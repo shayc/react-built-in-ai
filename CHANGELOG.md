@@ -1,5 +1,14 @@
 # @shayc/react-built-in-ai
 
+## 0.3.3
+
+### Patch Changes
+
+- 61fe010: Docs: clarify the `idle` lifecycle state (it also covers the availability probe and auto-advances to `ready` for an already-downloaded model), fix the Surface section that implied `proofread` streams, and tighten README wording. No code changes — this republishes the npm registry README.
+- 9be61e2: Resolve the built-in AI namespace inside the lifecycle store instead of the React hook. `useLifecycle` now passes only the API name down and no longer reads `globalThis` during render; the store resolves the namespace itself (live, per epoch) for the availability probe.
+
+  No public API or behavior change — an internal cleanup that removes the cached namespace, a `start` parameter, and a dead guard, and keeps namespace resolution out of the React layer.
+
 ## 0.3.2
 
 ### Patch Changes
