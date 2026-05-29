@@ -185,12 +185,12 @@ function GlobalDownloadBar() {
 
 Lifecycle gating throws `BuiltInAIError` subclasses. Action methods (`translate`, `rewrite`, …) pass the browser API's own rejections through unchanged — most commonly an `AbortError` `DOMException` when a `signal` fires. When the lifecycle wraps a browser rejection into `"error"` state, the original error is preserved as `error.cause`.
 
-| Error                   | What to do                                                                                                                    |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `UnsupportedError`      | The namespace is missing. Feature-detect with `isSupported()` and render a fallback.                                          |
-| `UnavailableError`      | The device can't run the model. Render a fallback; don't retry.                                                               |
+| Error                        | What to do                                                                                                                    |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `UnsupportedError`           | The namespace is missing. Feature-detect with `isSupported()` and render a fallback.                                          |
+| `UnavailableError`           | The device can't run the model. Render a fallback; don't retry.                                                               |
 | `MissingUserActivationError` | A download was needed without a user gesture. Trigger `prepare()` (or the first action) from a click/keypress handler.        |
-| `NotReadyError`         | A prior `create()` failed. Call `prepare()` from a user activation to retry; inspect `error.cause` for the underlying reason. |
+| `NotReadyError`              | A prior `create()` failed. Call `prepare()` from a user activation to retry; inspect `error.cause` for the underlying reason. |
 
 ## Cancellation
 
