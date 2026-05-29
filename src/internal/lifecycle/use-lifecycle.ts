@@ -1,7 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { BuiltInAIName } from "../../is-supported";
 import { createStore } from "./store";
-import { getNamespace } from "./types";
 
 function shallowEqualOptions<T extends object>(
   a: T | undefined,
@@ -52,16 +51,15 @@ export function useLifecycle<
   readQuota?: (instance: Model) => number,
 ) {
   const stableOptions = useStableOptions(options);
-  const namespace = getNamespace<Options, Model>(globalName);
 
   const [store] = useState(() =>
     createStore<Options, Model>(globalName, readQuota),
   );
 
   useEffect(() => {
-    store.start(namespace, stableOptions);
+    store.start(stableOptions);
     return () => store.stop();
-  }, [store, namespace, stableOptions]);
+  }, [store, stableOptions]);
 
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
 
