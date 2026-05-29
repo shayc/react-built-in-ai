@@ -1,6 +1,6 @@
 # `@shayc/react-built-in-ai`
 
-A thin React layer over the browser's [Built-in AI](https://developer.chrome.com/docs/ai/built-in) APIs — Gemini Nano on Chrome, Phi 4 Mini on Edge. Six task APIs, each with a React hook and an imperative creator, all sharing one lifecycle state machine.
+A thin React layer over the browser's [Built-in AI](https://developer.chrome.com/docs/ai/built-in) APIs — Gemini Nano on Chrome, Phi-4-mini on Edge. Six task APIs, each with a React hook and an imperative creator, all sharing one lifecycle state machine.
 
 [![npm version](https://img.shields.io/npm/v/@shayc/react-built-in-ai.svg)](https://www.npmjs.com/package/@shayc/react-built-in-ai)
 [![CI](https://github.com/shayc/react-built-in-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/shayc/react-built-in-ai/actions/workflows/ci.yml)
@@ -34,7 +34,7 @@ function Translate() {
 }
 ```
 
-The first click on a fresh browser triggers the model download (gated by user activation); subsequent clicks call `translate` directly. See [Lifecycle](#lifecycle) for the full state machine.
+On a fresh browser, the first click triggers the model download (gated by user activation); subsequent clicks call `translate` directly. See [Lifecycle](#lifecycle) for the full state machine.
 
 ## Features
 
@@ -53,9 +53,9 @@ The first click on a fresh browser triggers the model download (gated by user ac
 | [Writer](https://developer.chrome.com/docs/ai/writer-api)                    | `useWriter`           | `createWriter`           |
 | [Language Detector](https://developer.chrome.com/docs/ai/language-detection) | `useLanguageDetector` | `createLanguageDetector` |
 
-**Use the hook** when the options are known at render time (e.g. a translator bound to the user's current language pair). **Use the creator** when options are decided mid-flow and a hook can't be driven (queued work, command palettes, one-shot scripts).
+**Use the hook** when options are known at render time (e.g. a translator bound to the user's current language pair). **Use the creator** when options are decided mid-flow and a hook can't be driven (queued work, command palettes, one-shot scripts).
 
-Every hook shares the lifecycle surface plus task-specific methods (`translate`, `rewrite`, `proofread`, `summarize`, `write`, `detect`, plus streaming and `measureInput` variants where the underlying API supports them). Two exceptions: `useProofreader` omits `measureInput`/`inputQuota` (the browser API exposes neither), and `useLanguageDetector` has no streaming variant — its `detect` resolves with an array of ranked `{ detectedLanguage, confidence }` candidates rather than a string.
+Every hook shares the lifecycle surface plus task-specific methods (`translate`, `rewrite`, `proofread`, `summarize`, `write`, `detect`), along with streaming and `measureInput` variants where the underlying API supports them. Two exceptions: `useProofreader` exposes only `proofread` — no streaming, `measureInput`, or `inputQuota` (the browser API offers none); and `useLanguageDetector` has no streaming variant — its `detect` resolves with an array of ranked `{ detectedLanguage, confidence }` candidates rather than a string.
 
 ## Requirements
 
@@ -85,7 +85,7 @@ Every hook exposes `status`, `progress`, `error`, and `prepare`. `status` is alw
 
 - **`unsupported`** — the global namespace is missing on this browser.
 - **`unavailable`** — the model reports it cannot run on this device.
-- **`idle`** — supported, but a download is required before use.
+- **`idle`** — supported; not yet ready. The hook sits here while probing availability, and stays here if a download is required (started by `prepare()` or an action from a user activation). An already-downloaded model passes through to `ready` on its own.
 - **`downloading`** — entered via **`prepare()`** (or any action method) called from a **user activation**. `progress` ticks from `0` to `1`.
 - **`ready`** — the instance is live; action methods can be called freely.
 - **`error`** — `availability()` or `create()` rejected. Call `prepare()` to retry.
@@ -152,7 +152,7 @@ try {
 }
 ```
 
-Each `create*` mirrors the hook lifecycle exactly — same three typed errors (`UnsupportedError`, `UnavailableError`, `NoUserActivationError`), same progress wiring. Unlike the hooks, **other browser rejections surface unchanged** — most commonly `AbortError` when `signal` fires, or `NetworkError` on a failed download. The `instanceof BuiltInAIError` check above is what separates the typed lifecycle errors from those pass-throughs.
+Each `create*` mirrors the hook lifecycle exactly — same three typed errors (`UnsupportedError`, `UnavailableError`, `NoUserActivationError`), same progress wiring. Unlike with the hooks, **other browser rejections surface unchanged** — most commonly `AbortError` when `signal` fires, or `NetworkError` on a failed download. The `instanceof BuiltInAIError` check above is what separates the typed lifecycle errors from those pass-throughs.
 
 The returned instance is `AsyncDisposable` — prefer `await using` so it's released on scope exit. `.destroy()` is also exposed for callers that need to release earlier.
 
