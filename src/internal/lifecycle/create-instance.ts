@@ -12,6 +12,7 @@ import {
 import { hasUserActivation } from "../user-activation";
 import { getNamespace } from "./types";
 
+/** @internal */
 export interface CreateInstanceOptions<O extends object> {
   /** Built-in AI global namespace name (`"Translator"`, `"Rewriter"`, …). */
   name: BuiltInAIName;
@@ -24,16 +25,14 @@ export interface CreateInstanceOptions<O extends object> {
 }
 
 /**
- * The shared "namespace lookup → availability → activation → create with
- * progress wiring → cleanup" path used by every built-in AI entry point.
+ * Shared path behind every entry point: namespace lookup → availability →
+ * user-activation check → `create()` with progress wiring → cleanup.
  *
- * Throws the library's typed lifecycle errors (`UnsupportedError`,
- * `UnavailableError`, `NoUserActivationError`) for conditions it can map;
- * `availability()` / `create()` rejections from the browser pass through
- * unchanged. Writes to the shared progress store on the caller's behalf.
- * Never resolves with a partial instance — on rejection the store is cleared
- * in `finally`. The returned instance is `AsyncDisposable`; the wrap is a
- * no-op if the underlying instance already implements `[Symbol.asyncDispose]`.
+ * Maps known conditions to typed errors (`UnsupportedError`,
+ * `UnavailableError`, `NoUserActivationError`); browser `availability()` /
+ * `create()` rejections pass through unchanged. Writes download progress to the
+ * shared store and clears it in `finally`. The returned instance is wrapped as
+ * `AsyncDisposable` (a no-op if it already implements `[Symbol.asyncDispose]`).
  *
  * @internal
  */

@@ -37,7 +37,12 @@ function useStableOptions<T extends object>(
   return stable;
 }
 
-/** Shared lifecycle for every built-in AI namespace. Function refs are stable across renders. */
+/**
+ * Shared lifecycle for every built-in AI namespace. Function refs are stable
+ * across renders.
+ *
+ * @internal
+ */
 export function useLifecycle<
   Options extends object,
   Model extends DestroyableModel,

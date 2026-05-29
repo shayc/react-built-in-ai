@@ -40,7 +40,7 @@ export class NoUserActivationError extends BuiltInAIError {
   }
 }
 
-/** A prior `create()` rejected. Inspect `.cause` for the underlying browser rejection. */
+/** The model isn't ready — a prior `create()` rejected (inspect `.cause`), or the lifecycle reset mid-request. */
 export class NotReadyError extends BuiltInAIError {
   override name = "NotReadyError";
   constructor(cause?: unknown) {
