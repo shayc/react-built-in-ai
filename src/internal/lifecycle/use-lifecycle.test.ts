@@ -294,7 +294,7 @@ describe("useLifecycle", () => {
     expect(result.current.error?.message).toBe("availability boom");
   });
 
-  test("prepare() after error re-runs the chain and reaches ready on retry", async () => {
+  test("retry() after error re-runs the chain and reaches ready", async () => {
     let shouldFail = true;
     const create = vi.fn(() =>
       shouldFail
@@ -313,13 +313,13 @@ describe("useLifecycle", () => {
 
     shouldFail = false;
     setUserActivation(true);
-    await result.current.prepare();
+    await result.current.retry();
 
     expect(result.current.status).toBe("ready");
     expect(create).toHaveBeenCalledTimes(2);
   });
 
-  test("prepare() rejects with NotReadyError when the retry also fails", async () => {
+  test("retry() rejects with NotReadyError when the retry also fails", async () => {
     const original = new Error("persistent failure");
     const { Fake, create } = makeAIFake({
       status: "available",
@@ -333,11 +333,35 @@ describe("useLifecycle", () => {
     );
     await vi.waitFor(() => expect(result.current.status).toBe("error"));
 
-    await expect(result.current.prepare()).rejects.toMatchObject({
+    await expect(result.current.retry()).rejects.toMatchObject({
       name: "NotReadyError",
       cause: original,
     });
     expect(create).toHaveBeenCalledTimes(2);
+  });
+
+  test("prepare() from error state rejects with NotReadyError and does NOT re-create", async () => {
+    const original = new Error("create failed");
+    const { Fake, create } = makeAIFake({
+      status: "available",
+      buildInstance,
+      failCreate: original,
+    });
+    vi.stubGlobal(NAMESPACE, Fake);
+
+    const { result } = await renderHook(() =>
+      useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
+    );
+    await vi.waitFor(() => expect(result.current.status).toBe("error"));
+
+    // prepare() is warm-up only — it must not tear down and retry the way
+    // retry() does, so create() stays at the single failed attempt.
+    await expect(result.current.prepare()).rejects.toMatchObject({
+      name: "NotReadyError",
+      cause: original,
+    });
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(result.current.status).toBe("error");
   });
 
   test("acquire() resolves with { instance, signal } once ready", async () => {

@@ -62,7 +62,7 @@ export interface ProofreaderHookReturn extends BaseHookReturn {
 export function useProofreader(
   options?: ProofreaderOptions,
 ): ProofreaderHookReturn {
-  const { status, progress, error, prepare, acquire } = useLifecycle<
+  const { status, progress, error, prepare, retry, acquire } = useLifecycle<
     ProofreaderOptions,
     Proofreader
   >("Proofreader", options);
@@ -77,5 +77,5 @@ export function useProofreader(
     },
   }));
 
-  return { status, progress, error, prepare, ...actions };
+  return { status, progress, error, prepare, retry, ...actions };
 }

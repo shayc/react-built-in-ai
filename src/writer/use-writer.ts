@@ -66,7 +66,7 @@ export interface WriterHookReturn extends BaseHookReturn {
  * ```
  */
 export function useWriter(options?: WriterOptions): WriterHookReturn {
-  const { status, progress, error, prepare, inputQuota, acquire } =
+  const { status, progress, error, prepare, retry, inputQuota, acquire } =
     useLifecycle<WriterOptions, Writer>(
       "Writer",
       options,
@@ -98,5 +98,5 @@ export function useWriter(options?: WriterOptions): WriterHookReturn {
     },
   }));
 
-  return { status, progress, error, prepare, inputQuota, ...actions };
+  return { status, progress, error, prepare, retry, inputQuota, ...actions };
 }

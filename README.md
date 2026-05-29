@@ -81,14 +81,14 @@ if (!isSupported("Translator")) return <Fallback />;
 
 ## Lifecycle
 
-Every hook exposes `status`, `progress`, `error`, and `prepare`. `status` is always one of:
+Every hook exposes `status`, `progress`, `error`, `prepare`, and `retry`. `status` is always one of:
 
 - **`unsupported`** — the global namespace is missing on this browser.
 - **`unavailable`** — the model reports it cannot run on this device.
 - **`idle`** — supported; not yet ready. The hook sits here while probing availability, and stays here if a download is required (started by `prepare()` or an action from a user activation). An already-downloaded model passes through to `ready` on its own.
 - **`downloading`** — entered via **`prepare()`** (or any action method) called from a **user activation**. `progress` ticks from `0` to `1`.
 - **`ready`** — the instance is live; action methods can be called freely.
-- **`error`** — `availability()` or `create()` rejected. Call `prepare()` to retry.
+- **`error`** — `availability()` or `create()` rejected. Call `retry()` (from a user activation if a download is required) to tear down and re-initialize. `prepare()` does **not** recover from this state — it rejects with `NotReadyError`.
 
 ## Usage
 
@@ -190,7 +190,7 @@ Lifecycle gating throws `BuiltInAIError` subclasses. Action methods (`translate`
 | `UnsupportedError`           | The namespace is missing. Feature-detect with `isSupported()` and render a fallback.                                          |
 | `UnavailableError`           | The device can't run the model. Render a fallback; don't retry.                                                               |
 | `MissingUserActivationError` | A download was needed without a user gesture. Trigger `prepare()` (or the first action) from a click/keypress handler.        |
-| `NotReadyError`              | A prior `create()` failed. Call `prepare()` from a user activation to retry; inspect `error.cause` for the underlying reason. |
+| `NotReadyError`              | A prior `create()` failed. Call `retry()` from a user activation to recover; inspect `error.cause` for the underlying reason. |
 
 ## Cancellation
 

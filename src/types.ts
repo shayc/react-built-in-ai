@@ -24,10 +24,23 @@ export interface BaseHookReturn {
   /**
    * Pre-warms the model — triggers any required download and the underlying
    * `create()` call. Invoke from a user-activation handler (click, keypress)
-   * if a download may be required.
+   * if a download may be required. Warm-up only: from `error` state this
+   * rejects with `NotReadyError` rather than re-initializing — use
+   * {@link BaseHookReturn.retry} to recover.
    *
    * @throws A {@link BuiltInAIError} subclass — `UnsupportedError`,
    * `UnavailableError`, `MissingUserActivationError`, or `NotReadyError`.
    */
   prepare: () => Promise<void>;
+  /**
+   * Recovers from a failed lifecycle: tears down the errored instance,
+   * re-initializes from the current options, and warms up — the explicit retry
+   * path. From any non-`error` state this behaves exactly like
+   * {@link BaseHookReturn.prepare}. Invoke from a user-activation handler if a
+   * download may be required.
+   *
+   * @throws A {@link BuiltInAIError} subclass — `UnsupportedError`,
+   * `UnavailableError`, `MissingUserActivationError`, or `NotReadyError`.
+   */
+  retry: () => Promise<void>;
 }
