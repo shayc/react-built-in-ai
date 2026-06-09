@@ -25,7 +25,7 @@ afterEach(() => {
 });
 
 describe("useGlobalDownloadProgress", () => {
-  test("reports the highest in-flight progress matching the namespace", async () => {
+  test("reports the least-complete in-flight progress matching the namespace", async () => {
     const { result } = await renderHook(() =>
       useGlobalDownloadProgress("Translator"),
     );
@@ -35,10 +35,26 @@ describe("useGlobalDownloadProgress", () => {
     await vi.waitFor(() => expect(result.current).toBe(0.25));
 
     setDownloadProgress("Translator:en:de", 0.7);
+    await vi.waitFor(() => expect(result.current).toBe(0.25));
+
+    setDownloadProgress("Translator:en:fr", 0.8);
     await vi.waitFor(() => expect(result.current).toBe(0.7));
+  });
+
+  test("never moves backwards when the further-along download completes", async () => {
+    const { result } = await renderHook(() =>
+      useGlobalDownloadProgress("Translator"),
+    );
+
+    setDownloadProgress("Translator:en:fr", 0.2);
+    setDownloadProgress("Translator:en:de", 0.9);
+    await vi.waitFor(() => expect(result.current).toBe(0.2));
 
     clearDownloadProgress("Translator:en:de");
-    await vi.waitFor(() => expect(result.current).toBe(0.25));
+    await vi.waitFor(() => expect(result.current).toBe(0.2));
+
+    setDownloadProgress("Translator:en:fr", 0.5);
+    await vi.waitFor(() => expect(result.current).toBe(0.5));
   });
 
   test("matches an exact namespace key as well as `namespace:…` keys", async () => {
@@ -55,28 +71,57 @@ describe("useGlobalDownloadProgress", () => {
       useGlobalDownloadProgress("Translator"),
     );
 
-    // A higher-value write in a different namespace must not leak in: a
-    // smaller-value write in our namespace should still be the reported value.
-    // If filtering were broken, the hook would report 0.9 (the highest in flight).
-    setDownloadProgress("Rewriter", 0.9);
+    // A lower-value write in a different namespace must not leak in: a
+    // larger-value write in our namespace should still be the reported value.
+    // If filtering were broken, the hook would report 0.1 (the least complete).
+    setDownloadProgress("Rewriter", 0.1);
     setDownloadProgress("Translator", 0.3);
     await vi.waitFor(() => expect(result.current).toBe(0.3));
+  });
+
+  test("aggregates across the requested namespaces only", async () => {
+    const { result } = await renderHook(() =>
+      useGlobalDownloadProgress(["Proofreader", "Rewriter"]),
+    );
+    expect(result.current).toBeNull();
+
+    setDownloadProgress("Translator:en:fr", 0.1);
+    await vi.waitFor(() => expect(result.current).toBeNull());
+
+    setDownloadProgress("Proofreader", 0.5);
+    await vi.waitFor(() => expect(result.current).toBe(0.5));
+
+    setDownloadProgress("Rewriter", 0.3);
+    await vi.waitFor(() => expect(result.current).toBe(0.3));
+
+    clearDownloadProgress("Rewriter");
+    await vi.waitFor(() => expect(result.current).toBe(0.5));
   });
 
   test("with no argument, aggregates across every namespace", async () => {
     const { result } = await renderHook(() => useGlobalDownloadProgress());
     expect(result.current).toBeNull();
 
+    setDownloadProgress("Rewriter", 0.6);
+    await vi.waitFor(() => expect(result.current).toBe(0.6));
+
     setDownloadProgress("Translator:en:fr", 0.2);
     await vi.waitFor(() => expect(result.current).toBe(0.2));
+
+    clearDownloadProgress("Translator:en:fr");
+    await vi.waitFor(() => expect(result.current).toBe(0.6));
+  });
+
+  test("treats an explicit undefined argument like the no-argument call", async () => {
+    const { result } = await renderHook(() =>
+      useGlobalDownloadProgress(undefined),
+    );
+    expect(result.current).toBeNull();
 
     setDownloadProgress("Rewriter", 0.6);
     await vi.waitFor(() => expect(result.current).toBe(0.6));
 
-    setDownloadProgress("Proofreader", 0.8);
-    await vi.waitFor(() => expect(result.current).toBe(0.8));
-
-    clearDownloadProgress("Proofreader");
-    await vi.waitFor(() => expect(result.current).toBe(0.6));
+    setDownloadProgress("Translator:en:fr", 0.2);
+    await vi.waitFor(() => expect(result.current).toBe(0.2));
   });
 });
