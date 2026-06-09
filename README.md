@@ -40,7 +40,7 @@ On a fresh browser, the first click triggers the model download (gated by user a
 
 - **First-class TypeScript** — full `.d.mts` types and a `BuiltInAIError` hierarchy (`UnsupportedError`, `UnavailableError`, `MissingUserActivationError`, `NotReadyError`) for narrow `catch` clauses.
 - **`AsyncDisposable` instances** — use `await using` for automatic teardown; `.destroy()` stays exposed for callers that need to release earlier.
-- **Cross-instance download progress** — `useGlobalDownloadProgress()` aggregates in-flight downloads across every hook and creator for a single global progress UI.
+- **Cross-instance download progress** — `useGlobalDownloadProgress()` aggregates in-flight downloads across every hook and creator for a single global progress UI that never snaps backwards as individual downloads finish.
 
 ## Surface
 
@@ -163,7 +163,7 @@ Because a creator requires a user activation when a download is needed, prefer c
 ## Download progress
 
 - **Per-instance** — read `progress` and `status` from the hook return (or the creator's lifecycle, which writes to the same place).
-- **Cross-instance** — `useGlobalDownloadProgress(namespace?)` reports the highest in-flight progress across every instance, regardless of which component (or imperative caller) initiated the download. Pass a namespace (`"Translator"`, `"Rewriter"`, `"Proofreader"`, `"Summarizer"`, `"Writer"`, `"LanguageDetector"`) to scope to one API, or call with no argument to aggregate across all Built-in AI downloads.
+- **Cross-instance** — `useGlobalDownloadProgress(namespaces?)` reports the progress of the least-complete in-flight download across every instance, regardless of which component (or imperative caller) initiated the download. The value never moves backwards when one of several downloads finishes, and returns to `null` once all of them complete — finished downloads leave the store, so key "done" off `null`, not `progress === 1`. Pass a namespace (`"Translator"`, `"Rewriter"`, `"Proofreader"`, `"Summarizer"`, `"Writer"`, `"LanguageDetector"`) or an array of namespaces to scope the aggregation, or call with no argument to track all Built-in AI downloads.
 
 ```tsx
 function GlobalDownloadBar() {

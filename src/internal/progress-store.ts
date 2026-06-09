@@ -30,21 +30,32 @@ export function clearDownloadProgress(key: string): void {
 }
 
 /**
- * Highest progress among matching keys, or `null` when none are in flight.
- * `null` (not `0`) tells "nothing downloading" apart from "just started at 0%".
+ * Lowest progress among matching keys — the download with the longest to go —
+ * or `null` when none are in flight. `null` (not `0`) tells "nothing
+ * downloading" apart from "just started at 0%".
+ *
+ * Min, not max: a finished download leaves the map, so max would snap
+ * backwards to the next-furthest-behind download. Min only ever rises as
+ * downloads complete (though a download starting mid-flight joins at 0 and
+ * lowers it). Because completed downloads are cleared, the snapshot returns
+ * to `null` — never `1` — once the last matching download finishes.
  *
  * @internal
  */
-export function snapshotProgressFor(prefix: string | undefined): number | null {
-  const sep = prefix === undefined ? undefined : `${prefix}:`;
-  let max: number | null = null;
+export function snapshotProgressFor(
+  prefixes: readonly string[],
+): number | null {
+  let min: number | null = null;
   for (const [key, progress] of progressByKey) {
-    if (sep !== undefined && key !== prefix && !key.startsWith(sep)) {
+    if (
+      prefixes.length > 0 &&
+      !prefixes.some((prefix) => key === prefix || key.startsWith(`${prefix}:`))
+    ) {
       continue;
     }
-    max = max === null ? progress : Math.max(max, progress);
+    min = min === null ? progress : Math.min(min, progress);
   }
-  return max;
+  return min;
 }
 
 /**
