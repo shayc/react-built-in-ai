@@ -134,7 +134,7 @@ describe("useLifecycle", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  test("stays idle when availability is 'downloadable' and never auto-creates", async () => {
+  test("settles in 'downloadable' when a download is required and never auto-creates", async () => {
     const { Fake, create } = makeAIFake({
       status: "downloadable",
       buildInstance,
@@ -145,12 +145,27 @@ describe("useLifecycle", () => {
       useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
     );
 
-    await vi.waitFor(() => expect(Fake.availability).toHaveBeenCalledTimes(1));
-    expect(result.current.status).toBe("idle");
+    await vi.waitFor(() => expect(result.current.status).toBe("downloadable"));
+    expect(result.current.error).toBeNull();
     expect(create).not.toHaveBeenCalled();
   });
 
-  test("prepare() rejects with MissingUserActivationError when idle without activation", async () => {
+  test("settles in 'downloadable' when the browser is already downloading elsewhere", async () => {
+    const { Fake, create } = makeAIFake({
+      status: "downloading",
+      buildInstance,
+    });
+    vi.stubGlobal(NAMESPACE, Fake);
+
+    const { result } = await renderHook(() =>
+      useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
+    );
+
+    await vi.waitFor(() => expect(result.current.status).toBe("downloadable"));
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  test("prepare() rejects with MissingUserActivationError when downloadable without activation", async () => {
     const { Fake } = makeAIFake({
       status: "downloadable",
       buildInstance,
@@ -161,11 +176,13 @@ describe("useLifecycle", () => {
       useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
     );
 
-    await vi.waitFor(() => expect(result.current.status).toBe("idle"));
+    await vi.waitFor(() => expect(result.current.status).toBe("downloadable"));
 
     await expect(result.current.prepare()).rejects.toBeInstanceOf(
       MissingUserActivationError,
     );
+    expect(result.current.status).toBe("downloadable");
+    expect(result.current.error).toBeNull();
   });
 
   test("prepare() triggers download and reaches ready when userActivation is active", async () => {
@@ -178,7 +195,7 @@ describe("useLifecycle", () => {
     const { result } = await renderHook(() =>
       useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
     );
-    await vi.waitFor(() => expect(result.current.status).toBe("idle"));
+    await vi.waitFor(() => expect(result.current.status).toBe("downloadable"));
 
     setUserActivation(true);
     await result.current.prepare();
@@ -205,7 +222,7 @@ describe("useLifecycle", () => {
     const { result } = await renderHook(() =>
       useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
     );
-    await vi.waitFor(() => expect(result.current.status).toBe("idle"));
+    await vi.waitFor(() => expect(result.current.status).toBe("downloadable"));
 
     setUserActivation(true);
     // Fire-and-forget to reach "downloading"; teardown aborts it — swallow.
@@ -238,7 +255,7 @@ describe("useLifecycle", () => {
     const { result } = await renderHook(() =>
       useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
     );
-    await vi.waitFor(() => expect(result.current.status).toBe("idle"));
+    await vi.waitFor(() => expect(result.current.status).toBe("downloadable"));
 
     setUserActivation(true);
     void result.current.prepare();
@@ -376,7 +393,7 @@ describe("useLifecycle", () => {
     const { result } = await renderHook(() =>
       useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
     );
-    await vi.waitFor(() => expect(result.current.status).toBe("idle"));
+    await vi.waitFor(() => expect(result.current.status).toBe("downloadable"));
 
     setUserActivation(true);
     void result.current.prepare();
@@ -400,7 +417,7 @@ describe("useLifecycle", () => {
     const { result } = await renderHook(() =>
       useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
     );
-    await vi.waitFor(() => expect(result.current.status).toBe("idle"));
+    await vi.waitFor(() => expect(result.current.status).toBe("downloadable"));
 
     setUserActivation(true);
     // Fire-and-forget to reach "downloading"; teardown aborts it — swallow.
@@ -550,7 +567,7 @@ describe("useLifecycle", () => {
     expect(create).toHaveBeenCalledTimes(1);
   });
 
-  test("acquire() rejects with MissingUserActivationError when idle without activation", async () => {
+  test("acquire() rejects with MissingUserActivationError when downloadable without activation", async () => {
     const { Fake } = makeAIFake({
       status: "downloadable",
       buildInstance,
@@ -561,11 +578,52 @@ describe("useLifecycle", () => {
       useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
     );
 
-    await vi.waitFor(() => expect(result.current.status).toBe("idle"));
+    await vi.waitFor(() => expect(result.current.status).toBe("downloadable"));
 
     await expect(result.current.acquire()).rejects.toBeInstanceOf(
       MissingUserActivationError,
     );
+  });
+
+  test("acquire() from downloadable with activation drives the download and resolves", async () => {
+    const { Fake, create, instances } = makeAIFake({
+      status: "downloadable",
+      buildInstance: () => buildInstance({ marker: "gesture" }),
+    });
+    vi.stubGlobal(NAMESPACE, Fake);
+
+    const { result } = await renderHook(() =>
+      useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
+    );
+    await vi.waitFor(() => expect(result.current.status).toBe("downloadable"));
+
+    setUserActivation(true);
+    const acquired = await result.current.acquire();
+
+    expect(acquired.instance).toBe(instances[0]);
+    expect(result.current.status).toBe("ready");
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  test("an options change re-probes out of downloadable", async () => {
+    const availability = vi.fn((options?: TestOptions) =>
+      Promise.resolve(options?.mode === "b" ? "available" : "downloadable"),
+    );
+    const create = vi.fn(() => Promise.resolve(buildInstance()));
+    vi.stubGlobal(NAMESPACE, { availability, create });
+
+    const { result, rerender } = await renderHook(
+      ({ mode }: { mode: string } = { mode: "a" }) =>
+        useLifecycle<TestOptions, TestInstance>(NAMESPACE, { mode }),
+      { initialProps: { mode: "a" } },
+    );
+    await vi.waitFor(() => expect(result.current.status).toBe("downloadable"));
+    expect(create).not.toHaveBeenCalled();
+
+    await rerender({ mode: "b" });
+
+    await vi.waitFor(() => expect(result.current.status).toBe("ready"));
+    expect(create).toHaveBeenCalledTimes(1);
   });
 
   test("acquire() after unmount rejects with AbortError", async () => {
@@ -597,7 +655,7 @@ describe("useLifecycle", () => {
     const { result, unmount } = await renderHook(() =>
       useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
     );
-    await vi.waitFor(() => expect(result.current.status).toBe("idle"));
+    await vi.waitFor(() => expect(result.current.status).toBe("downloadable"));
 
     setUserActivation(true);
     // Fire-and-forget to reach "downloading"; the unmount below aborts it — swallow.
@@ -650,7 +708,7 @@ describe("useLifecycle", () => {
     const { result } = await renderHook(() =>
       useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
     );
-    await vi.waitFor(() => expect(result.current.status).toBe("idle"));
+    await vi.waitFor(() => expect(result.current.status).toBe("downloadable"));
 
     setUserActivation(true);
     const p1 = result.current.prepare();
@@ -675,7 +733,7 @@ describe("useLifecycle", () => {
     const { result, unmount } = await renderHook(() =>
       useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
     );
-    await vi.waitFor(() => expect(result.current.status).toBe("idle"));
+    await vi.waitFor(() => expect(result.current.status).toBe("downloadable"));
 
     setUserActivation(true);
     const pending = result.current.prepare();
