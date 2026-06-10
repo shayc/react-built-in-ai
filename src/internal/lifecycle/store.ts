@@ -233,8 +233,9 @@ export function createStore<
           continue;
         case "idle":
           await awaitTask(current.probe, callerSignal);
-          // Re-read live state: a stopped store stays idle with a settled
-          // probe, and kickoff()'s activation gate is its only exit.
+          // A settled probe always transitions out of idle, so this is
+          // unreachable today — kept so a future settle path that forgets to
+          // transition fails through kickoff()'s gate instead of spinning.
           if (state.kind === "idle") {
             kickoff();
           }

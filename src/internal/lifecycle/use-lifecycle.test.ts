@@ -585,6 +585,47 @@ describe("useLifecycle", () => {
     );
   });
 
+  test("acquire() from downloadable with activation drives the download and resolves", async () => {
+    const { Fake, create, instances } = makeAIFake({
+      status: "downloadable",
+      buildInstance: () => buildInstance({ marker: "gesture" }),
+    });
+    vi.stubGlobal(NAMESPACE, Fake);
+
+    const { result } = await renderHook(() =>
+      useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
+    );
+    await vi.waitFor(() => expect(result.current.status).toBe("downloadable"));
+
+    setUserActivation(true);
+    const acquired = await result.current.acquire();
+
+    expect(acquired.instance).toBe(instances[0]);
+    expect(result.current.status).toBe("ready");
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  test("an options change re-probes out of downloadable", async () => {
+    const availability = vi.fn((options?: TestOptions) =>
+      Promise.resolve(options?.mode === "b" ? "available" : "downloadable"),
+    );
+    const create = vi.fn(() => Promise.resolve(buildInstance()));
+    vi.stubGlobal(NAMESPACE, { availability, create });
+
+    const { result, rerender } = await renderHook(
+      ({ mode }: { mode: string } = { mode: "a" }) =>
+        useLifecycle<TestOptions, TestInstance>(NAMESPACE, { mode }),
+      { initialProps: { mode: "a" } },
+    );
+    await vi.waitFor(() => expect(result.current.status).toBe("downloadable"));
+    expect(create).not.toHaveBeenCalled();
+
+    await rerender({ mode: "b" });
+
+    await vi.waitFor(() => expect(result.current.status).toBe("ready"));
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
   test("acquire() after unmount rejects with AbortError", async () => {
     const { Fake } = makeAIFake({
       status: "available",

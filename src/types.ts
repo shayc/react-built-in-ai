@@ -26,9 +26,10 @@ export interface BaseHookReturn {
   error: BuiltInAIError | null;
   /**
    * Pre-warms the model — triggers any required download and the underlying
-   * `create()` call. Invoke from a user-activation handler (click, keypress)
-   * if a download may be required. From `error` state it tears down the failed
-   * instance and re-initializes, so it doubles as the recovery/retry path.
+   * `create()` call. From `downloadable`, invoke it from a user-activation
+   * handler (click, keypress) — the browser only starts a model download on a
+   * gesture. From `error` state it tears down the failed instance and
+   * re-initializes, so it doubles as the recovery/retry path.
    *
    * @throws A {@link BuiltInAIError} subclass — `UnsupportedError`,
    * `UnavailableError`, `MissingUserActivationError`, or `NotReadyError`.
