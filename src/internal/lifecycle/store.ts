@@ -30,6 +30,7 @@ interface ProvisionOptions {
 
 type InternalState<Model> =
   | { kind: "idle"; probe: Promise<void> }
+  | { kind: "downloadable" }
   | { kind: "downloading"; progress: number; task: Promise<void> }
   | { kind: "ready"; instance: Model; inputQuota: number }
   | { kind: "unsupported" }
@@ -136,7 +137,11 @@ export function createStore<
       }
       if (availability === "available") {
         await provision(signal, { showDownloadUI: false });
+        return;
       }
+      // "downloadable" or "downloading": a fetch is needed, and starting one
+      // requires a user gesture — park until prepare() or an action provides it.
+      transition({ kind: "downloadable" });
     } catch (error) {
       if (signal.aborted) {
         return;
@@ -223,10 +228,13 @@ export function createStore<
         case "downloading":
           await awaitTask(current.task, callerSignal);
           continue;
+        case "downloadable":
+          kickoff();
+          continue;
         case "idle":
           await awaitTask(current.probe, callerSignal);
-          // Re-read live state: a concurrent caller may have kicked off already,
-          // so a single create() is shared rather than duplicated.
+          // Re-read live state: a stopped store stays idle with a settled
+          // probe, and kickoff()'s activation gate is its only exit.
           if (state.kind === "idle") {
             kickoff();
           }

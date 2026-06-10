@@ -1,14 +1,17 @@
 import type { BuiltInAIError } from "./errors";
 
 /**
- * Lifecycle state of a built-in AI hook. Starts at `idle` and advances to
- * `ready` — through `downloading` when the model must be fetched first — or
- * settles in a terminal `unsupported` / `unavailable` / `error`.
+ * Lifecycle state of a built-in AI hook. Starts at `idle` (probing
+ * availability) and advances to `ready` — pausing at `downloadable` until a
+ * user gesture authorizes the fetch, then through `downloading` — or settles
+ * in a terminal `unsupported` / `unavailable` / `error`. `downloadable`
+ * mirrors the browser's `availability()` vocabulary.
  */
 export type Status =
   | "unsupported"
   | "unavailable"
   | "idle"
+  | "downloadable"
   | "downloading"
   | "ready"
   | "error";

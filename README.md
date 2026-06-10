@@ -85,14 +85,15 @@ Every hook exposes `status`, `progress`, `error`, and `prepare`. `status` is alw
 
 - **`unsupported`** — the global namespace is missing on this browser.
 - **`unavailable`** — the model reports it cannot run on this device.
-- **`idle`** — supported; not yet ready. The hook sits here while probing availability, and stays here if a download is required (started by `prepare()` or an action from a user activation). An already-downloaded model passes through to `ready` on its own.
-- **`downloading`** — entered via **`prepare()`** (or any action method) called from a **user activation**. `progress` ticks from `0` to `1`.
+- **`idle`** — supported; probing availability. An already-downloaded model passes through to `ready` on its own.
+- **`downloadable`** — the model needs a download, which the browser only starts from a **user activation**. Render your download affordance off this state; `prepare()` (or any action method) called from a user gesture moves it along. Mirrors the browser's `availability()` vocabulary.
+- **`downloading`** — the fetch is running. `progress` ticks from `0` to `1`.
 - **`ready`** — the instance is live; action methods can be called freely.
 - **`error`** — `availability()` or `create()` rejected. Call `prepare()` (from a user activation if a download is required) to tear down and re-initialize.
 
 ## Usage
 
-Action methods are gated by the lifecycle — they throw `UnsupportedError`, `UnavailableError`, `MissingUserActivationError`, or `NotReadyError` when the state forbids them. **A call rejected by the gate never mutates the hook's `status` or `error`.** (A call made from `idle` that triggers a download is not gate-rejected — it drives `status` through `downloading` to `ready` or `error` like `prepare()`.)
+Action methods are gated by the lifecycle — they throw `UnsupportedError`, `UnavailableError`, `MissingUserActivationError`, or `NotReadyError` when the state forbids them. **A call rejected by the gate never mutates the hook's `status` or `error`.** (A call made from `downloadable` with a user activation is not gate-rejected — it drives `status` through `downloading` to `ready` or `error` like `prepare()`.)
 
 ```tsx
 function Demo() {
@@ -111,7 +112,8 @@ function Demo() {
       disabled={translator.status === "downloading"}
       onClick={async () => {
         // 3. The click is a user activation, so the hook is allowed to start
-        //    the download here if status was "idle"; otherwise it runs at once.
+        //    the download here if status was "downloadable"; otherwise it runs
+        //    at once.
         const out = await translator.translate("…some text…");
         console.log(out);
       }}
