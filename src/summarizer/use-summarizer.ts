@@ -5,8 +5,8 @@ import type { BaseHookReturn } from "../types";
 
 /**
  * Options for {@link useSummarizer}. Mirrors `Summarizer.create()` minus the
- * hook-managed `signal` and `monitor`. Compared shallowly — memoize array
- * values to avoid spurious re-creation.
+ * hook-managed `signal` and `monitor`. Compared shallowly, with array values
+ * compared element-wise — inline option literals are safe.
  *
  * @see https://developer.chrome.com/docs/ai/summarizer-api
  */
@@ -84,25 +84,19 @@ export function useSummarizer(
   const [actions] = useState(() => ({
     async summarize(input: string, opts?: SummarizeCallOptions) {
       const { instance, signal } = await acquire(opts?.signal);
-      return instance.summarize(input, { context: opts?.context, signal });
+      return instance.summarize(input, { ...opts, signal });
     },
     async *summarizeStream(
       input: string,
       opts?: SummarizeCallOptions,
     ): AsyncIterable<string> {
       const { instance, signal } = await acquire(opts?.signal);
-      const stream = instance.summarizeStreaming(input, {
-        context: opts?.context,
-        signal,
-      });
+      const stream = instance.summarizeStreaming(input, { ...opts, signal });
       yield* streamChunks(stream, signal);
     },
     async measureInput(input: string, opts?: SummarizeCallOptions) {
       const { instance, signal } = await acquire(opts?.signal);
-      return instance.measureInputUsage(input, {
-        context: opts?.context,
-        signal,
-      });
+      return instance.measureInputUsage(input, { ...opts, signal });
     },
   }));
 

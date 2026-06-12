@@ -4,8 +4,8 @@ import type { BaseHookReturn } from "../types";
 
 /**
  * Options for {@link useProofreader}. Mirrors `Proofreader.create()` minus the
- * hook-managed `signal` and `monitor`. Compared shallowly — memoize
- * `expectedInputLanguages` to avoid spurious re-creation.
+ * hook-managed `signal` and `monitor`. Compared shallowly, with array values
+ * compared element-wise — inline option literals are safe.
  *
  * @see https://developer.chrome.com/docs/ai/proofreader-api
  */
@@ -73,7 +73,7 @@ export function useProofreader(
       opts?: ProofreadCallOptions,
     ): Promise<ProofreadResult> {
       const { instance, signal } = await acquire(opts?.signal);
-      return instance.proofread(input, { signal });
+      return instance.proofread(input, { ...opts, signal });
     },
   }));
 

@@ -84,19 +84,19 @@ export function useTranslator(
   const [actions] = useState(() => ({
     async translate(input: string, opts?: TranslateCallOptions) {
       const { instance, signal } = await acquire(opts?.signal);
-      return instance.translate(input, { signal });
+      return instance.translate(input, { ...opts, signal });
     },
     async *translateStream(
       input: string,
       opts?: TranslateCallOptions,
     ): AsyncIterable<string> {
       const { instance, signal } = await acquire(opts?.signal);
-      const stream = instance.translateStreaming(input, { signal });
+      const stream = instance.translateStreaming(input, { ...opts, signal });
       yield* streamChunks(stream, signal);
     },
     async measureInput(input: string, opts?: TranslateCallOptions) {
       const { instance, signal } = await acquire(opts?.signal);
-      return instance.measureInputUsage(input, { signal });
+      return instance.measureInputUsage(input, { ...opts, signal });
     },
   }));
 

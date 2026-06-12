@@ -25,6 +25,10 @@ export async function* streamChunks(
     }
   } finally {
     signal.removeEventListener("abort", onAbort);
+    // The consumer may exit early (break/throw): releasing the lock alone
+    // would leave the source producing into an abandoned stream. Cancel is a
+    // no-op on a drained or already-cancelled stream.
+    void reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }
 }

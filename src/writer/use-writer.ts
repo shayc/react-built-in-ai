@@ -5,8 +5,8 @@ import type { BaseHookReturn } from "../types";
 
 /**
  * Options for {@link useWriter}. Mirrors `Writer.create()` minus the
- * hook-managed `signal` and `monitor`. Compared shallowly — memoize array
- * values to avoid spurious re-creation.
+ * hook-managed `signal` and `monitor`. Compared shallowly, with array values
+ * compared element-wise — inline option literals are safe.
  *
  * @see https://developer.chrome.com/docs/ai/writer-api
  */
@@ -76,25 +76,19 @@ export function useWriter(options?: WriterOptions): WriterHookReturn {
   const [actions] = useState(() => ({
     async write(input: string, opts?: WriteCallOptions) {
       const { instance, signal } = await acquire(opts?.signal);
-      return instance.write(input, { context: opts?.context, signal });
+      return instance.write(input, { ...opts, signal });
     },
     async *writeStream(
       input: string,
       opts?: WriteCallOptions,
     ): AsyncIterable<string> {
       const { instance, signal } = await acquire(opts?.signal);
-      const stream = instance.writeStreaming(input, {
-        context: opts?.context,
-        signal,
-      });
+      const stream = instance.writeStreaming(input, { ...opts, signal });
       yield* streamChunks(stream, signal);
     },
     async measureInput(input: string, opts?: WriteCallOptions) {
       const { instance, signal } = await acquire(opts?.signal);
-      return instance.measureInputUsage(input, {
-        context: opts?.context,
-        signal,
-      });
+      return instance.measureInputUsage(input, { ...opts, signal });
     },
   }));
 

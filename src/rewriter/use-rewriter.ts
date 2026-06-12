@@ -5,8 +5,8 @@ import type { BaseHookReturn } from "../types";
 
 /**
  * Options for {@link useRewriter}. Mirrors `Rewriter.create()` minus the
- * hook-managed `signal` and `monitor`. Compared shallowly — memoize array
- * values to avoid spurious re-creation.
+ * hook-managed `signal` and `monitor`. Compared shallowly, with array values
+ * compared element-wise — inline option literals are safe.
  *
  * @see https://developer.chrome.com/docs/ai/rewriter-api
  */
@@ -79,25 +79,19 @@ export function useRewriter(options?: RewriterOptions): RewriterHookReturn {
   const [actions] = useState(() => ({
     async rewrite(input: string, opts?: RewriteCallOptions) {
       const { instance, signal } = await acquire(opts?.signal);
-      return instance.rewrite(input, { context: opts?.context, signal });
+      return instance.rewrite(input, { ...opts, signal });
     },
     async *rewriteStream(
       input: string,
       opts?: RewriteCallOptions,
     ): AsyncIterable<string> {
       const { instance, signal } = await acquire(opts?.signal);
-      const stream = instance.rewriteStreaming(input, {
-        context: opts?.context,
-        signal,
-      });
+      const stream = instance.rewriteStreaming(input, { ...opts, signal });
       yield* streamChunks(stream, signal);
     },
     async measureInput(input: string, opts?: RewriteCallOptions) {
       const { instance, signal } = await acquire(opts?.signal);
-      return instance.measureInputUsage(input, {
-        context: opts?.context,
-        signal,
-      });
+      return instance.measureInputUsage(input, { ...opts, signal });
     },
   }));
 
