@@ -4,8 +4,8 @@ import type { BaseHookReturn } from "../types";
 
 /**
  * Options for {@link useLanguageDetector}. Mirrors `LanguageDetector.create()`
- * minus the hook-managed `signal` and `monitor`. Compared shallowly — memoize
- * `expectedInputLanguages` to avoid spurious re-creation.
+ * minus the hook-managed `signal` and `monitor`. Compared shallowly, with
+ * array values compared element-wise — inline option literals are safe.
  *
  * @see https://developer.chrome.com/docs/ai/language-detection
  */
@@ -86,11 +86,11 @@ export function useLanguageDetector(
       opts?: DetectCallOptions,
     ): Promise<LanguageDetectionResult[]> {
       const { instance, signal } = await acquire(opts?.signal);
-      return instance.detect(input, { signal });
+      return instance.detect(input, { ...opts, signal });
     },
     async measureInput(input: string, opts?: DetectCallOptions) {
       const { instance, signal } = await acquire(opts?.signal);
-      return instance.measureInputUsage(input, { signal });
+      return instance.measureInputUsage(input, { ...opts, signal });
     },
   }));
 

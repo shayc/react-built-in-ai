@@ -1,3 +1,5 @@
+import { createElement } from "react";
+import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { renderHook } from "vitest-browser-react";
 import {
@@ -110,6 +112,19 @@ describe("useGlobalDownloadProgress", () => {
 
     clearDownloadProgress("Translator:en:fr");
     await vi.waitFor(() => expect(result.current).toBe(0.6));
+  });
+
+  test("server-renders as null even while a download is in flight", () => {
+    // The server snapshot is a constant `null`: SSR markup must not depend on
+    // whatever this realm happens to be downloading at render time.
+    setDownloadProgress("Translator", 0.5);
+
+    function Probe(): string {
+      const progress = useGlobalDownloadProgress();
+      return progress === null ? "null" : String(progress);
+    }
+
+    expect(renderToString(createElement(Probe))).toBe("null");
   });
 
   test("treats an explicit undefined argument like the no-argument call", async () => {

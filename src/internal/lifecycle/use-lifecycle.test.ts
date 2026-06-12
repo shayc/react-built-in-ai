@@ -1,4 +1,5 @@
-import { StrictMode } from "react";
+import { createElement, StrictMode } from "react";
+import { renderToString } from "react-dom/server";
 import {
   afterEach,
   beforeEach,
@@ -565,6 +566,64 @@ describe("useLifecycle", () => {
     await rerender({ mode: "a" });
 
     expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  test("inline array-valued options do not re-create or loop renders", async () => {
+    const { Fake, create } = makeAIFake({
+      status: "available",
+      buildInstance,
+    });
+    vi.stubGlobal(NAMESPACE, Fake);
+
+    // The spread forces a fresh array identity on every render — the shape
+    // that crashed with "Too many re-renders" before element-wise comparison.
+    const { result, rerender } = await renderHook(
+      (props: { languages: string[] } = { languages: ["en"] }) =>
+        useLifecycle<{ languages: string[] }, TestInstance>(NAMESPACE, {
+          languages: [...props.languages],
+        }),
+      { initialProps: { languages: ["en"] } },
+    );
+    await vi.waitFor(() => expect(result.current.status).toBe("ready"));
+
+    await rerender({ languages: ["en"] });
+
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  test("re-creates when an array-valued option's contents change", async () => {
+    const first = buildInstance({ marker: "one" });
+    const second = buildInstance({ marker: "two" });
+    const queue: TestInstance[] = [first, second];
+    const { Fake, create } = makeAIFake({
+      status: "available",
+      buildInstance: () => queue.shift()!,
+    });
+    vi.stubGlobal(NAMESPACE, Fake);
+
+    const { result, rerender } = await renderHook(
+      (props: { languages: string[] } = { languages: ["en"] }) =>
+        useLifecycle<{ languages: string[] }, TestInstance>(NAMESPACE, props),
+      { initialProps: { languages: ["en"] } },
+    );
+    await vi.waitFor(() => expect(result.current.status).toBe("ready"));
+
+    await rerender({ languages: ["en", "fr"] });
+    await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(first.destroy).toHaveBeenCalledTimes(1));
+    expect(second.destroy).not.toHaveBeenCalled();
+  });
+
+  test("server-renders the idle snapshot instead of crashing on a missing getServerSnapshot", () => {
+    function Probe(): string {
+      const lifecycle = useLifecycle<TestOptions, TestInstance>(
+        NAMESPACE,
+        undefined,
+      );
+      return lifecycle.status;
+    }
+
+    expect(renderToString(createElement(Probe))).toBe("idle");
   });
 
   test("acquire() rejects with MissingUserActivationError when downloadable without activation", async () => {

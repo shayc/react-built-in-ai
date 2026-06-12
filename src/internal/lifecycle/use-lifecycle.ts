@@ -2,6 +2,19 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import type { BuiltInAIName } from "../../is-supported";
 import { createStore } from "./store";
 
+function arrayEqual(a: readonly unknown[], b: readonly unknown[]): boolean {
+  return a.length === b.length && a.every((value, i) => Object.is(value, b[i]));
+}
+
+// Option arrays (`expectedInputLanguages`, …) are flat lists of primitives, so
+// one-level element-wise comparison is exhaustive.
+function valueEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) {
+    return true;
+  }
+  return Array.isArray(a) && Array.isArray(b) && arrayEqual(a, b);
+}
+
 function shallowEqual<T extends object>(
   a: T | undefined,
   b: T | undefined,
@@ -19,7 +32,7 @@ function shallowEqual<T extends object>(
   const ar = a as Record<string, unknown>;
   const br = b as Record<string, unknown>;
   for (const k of keys) {
-    if (!Object.is(ar[k], br[k])) {
+    if (!valueEqual(ar[k], br[k])) {
       return false;
     }
   }
@@ -61,7 +74,13 @@ export function useLifecycle<
     return () => store.stop();
   }, [store, stableOptions]);
 
-  const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
+  // getSnapshot doubles as the server snapshot: the store can't leave idle
+  // until the mount effect runs, so server render and hydration agree.
+  const snapshot = useSyncExternalStore(
+    store.subscribe,
+    store.getSnapshot,
+    store.getSnapshot,
+  );
 
   return {
     status: snapshot.status,

@@ -37,8 +37,11 @@ export function useGlobalDownloadProgress(
   namespaces?: BuiltInAIName | readonly BuiltInAIName[],
 ): number | null {
   const prefixes = toPrefixes(namespaces);
-  return useSyncExternalStore(subscribeProgress, () =>
-    snapshotProgressFor(prefixes),
+  return useSyncExternalStore(
+    subscribeProgress,
+    () => snapshotProgressFor(prefixes),
+    // No download can be in flight during SSR.
+    () => null,
   );
 }
 

@@ -38,6 +38,28 @@ describe("streamChunks", () => {
     expect(stream.locked).toBe(false);
   });
 
+  test("cancels the underlying source when the consumer exits the loop early", async () => {
+    let cancelled = false;
+    const stream = new ReadableStream<string>({
+      start(controller) {
+        controller.enqueue("first");
+        controller.enqueue("second");
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const { signal } = new AbortController();
+
+    for await (const chunk of streamChunks(stream, signal)) {
+      expect(chunk).toBe("first");
+      break;
+    }
+
+    expect(cancelled).toBe(true);
+    expect(stream.locked).toBe(false);
+  });
+
   test("throws an AbortError when the signal is already aborted on entry", async () => {
     const stream = streamFromChunks(["a", "b"]);
     const controller = new AbortController();
