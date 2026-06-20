@@ -882,16 +882,12 @@ describe("useLifecycle", () => {
     });
     await vi.waitFor(() => expect(result.current.status).toBe("downloadable"));
 
-    // A sibling instance (or an imperative create*()) finishes the device-wide
-    // download. userActivation is never set, so convergence must be gesture-free.
     available = true;
     invalidateAvailability(NAMESPACE);
 
     await vi.waitFor(() => expect(result.current.status).toBe("ready"));
     expect(create).toHaveBeenCalledTimes(1);
-    // willDownload=false on the converging instance: no monitor, no refetch.
     expect(createOptions[0].monitor).toBeUndefined();
-    // Never flashed "downloading" on the way to ready.
     expect(observed).not.toContain("downloading");
     expect(result.current.error).toBeNull();
   });
@@ -907,8 +903,6 @@ describe("useLifecycle", () => {
     await vi.waitFor(() => expect(result.current.status).toBe("downloadable"));
     const probesAtMount = availability.mock.calls.length;
 
-    // A different option set (different buildProgressKey) finished its download.
-    // Availability is per-config, so this instance must not re-probe or converge.
     invalidateAvailability(buildProgressKey(NAMESPACE, { mode: "b" }));
 
     expect(availability).toHaveBeenCalledTimes(probesAtMount);
@@ -934,8 +928,6 @@ describe("useLifecycle", () => {
     available = true;
     invalidateAvailability(NAMESPACE);
 
-    // The re-probe finds "available" and attempts create(), which throws — but a
-    // background failure must not clobber a healthy parked store into "error".
     await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(1));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(result.current.status).toBe("downloadable");
@@ -964,13 +956,10 @@ describe("useLifecycle", () => {
     );
     await vi.waitFor(() => expect(result.current.status).toBe("downloadable"));
 
-    // A sibling completes → a silent background convergence is now in flight.
     available = true;
     invalidateAvailability(NAMESPACE);
     await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(1));
 
-    // A reactive acquire() (no user gesture) lands mid-convergence: it must join
-    // the in-flight provision rather than throw MissingUserActivationError.
     const pending = result.current.acquire();
     resolveCreate(inst);
 
@@ -993,8 +982,6 @@ describe("useLifecycle", () => {
 
     await unmount();
 
-    // The unmounted store must be unsubscribed: an invalidation for its key
-    // triggers no re-probe and no create.
     invalidateAvailability(NAMESPACE);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -1013,8 +1000,6 @@ describe("useLifecycle", () => {
     });
     vi.stubGlobal(NAMESPACE, { availability, create });
 
-    // Two instances of the SAME config (same progress key) — e.g. a board-level
-    // chip and a Settings panel — mounted independently.
     const board = await renderHook(() =>
       useLifecycle<TestOptions, TestInstance>(NAMESPACE, { mode: "a" }),
     );
@@ -1028,14 +1013,10 @@ describe("useLifecycle", () => {
       expect(settings.result.current.status).toBe("downloadable"),
     );
 
-    // The Settings panel performs the real download (with a gesture); its
-    // create-instance completion publishes the availability invalidation.
     setUserActivation(true);
     await settings.result.current.prepare();
     expect(settings.result.current.status).toBe("ready");
 
-    // The board chip — never touched, never given its own gesture — re-probes
-    // and converges to ready on its own.
     await vi.waitFor(() => expect(board.result.current.status).toBe("ready"));
     expect(create).toHaveBeenCalledTimes(2);
   });
