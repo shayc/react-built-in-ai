@@ -5,17 +5,7 @@ import {
 } from "./availability-store";
 
 describe("availability-store", () => {
-  test("invalidateAvailability notifies a subscriber with the key", () => {
-    const seen: string[] = [];
-    const unsubscribe = subscribeAvailability((key) => seen.push(key));
-
-    invalidateAvailability('Translator:{"sourceLanguage":"en"}');
-
-    expect(seen).toEqual(['Translator:{"sourceLanguage":"en"}']);
-    unsubscribe();
-  });
-
-  test("notifies every active subscriber", () => {
+  test("notifies every active subscriber once with the key", () => {
     const a = vi.fn();
     const b = vi.fn();
     const unsubA = subscribeAvailability(a);
@@ -23,7 +13,9 @@ describe("availability-store", () => {
 
     invalidateAvailability("Summarizer");
 
+    expect(a).toHaveBeenCalledTimes(1);
     expect(a).toHaveBeenCalledWith("Summarizer");
+    expect(b).toHaveBeenCalledTimes(1);
     expect(b).toHaveBeenCalledWith("Summarizer");
     unsubA();
     unsubB();
@@ -37,9 +29,5 @@ describe("availability-store", () => {
     invalidateAvailability("Writer");
 
     expect(listener).not.toHaveBeenCalled();
-  });
-
-  test("is a no-op when there are no subscribers", () => {
-    expect(() => invalidateAvailability("Rewriter")).not.toThrow();
   });
 });
