@@ -4,6 +4,7 @@ import {
   UnsupportedError,
 } from "../../errors";
 import type { BuiltInAIName } from "../../is-supported";
+import { invalidateAvailability } from "../availability-store";
 import {
   buildProgressKey,
   clearDownloadProgress,
@@ -62,6 +63,7 @@ export async function createInstance<
     if (key) {
       setDownloadProgress(key, 0);
     }
+
     const instance = await namespace.create({
       ...options!,
       signal,
@@ -75,9 +77,17 @@ export async function createInstance<
             })
         : undefined,
     });
+
+    if (key) {
+      // Success path only (not `finally`): a failed/aborted download must not
+      // wake siblings. The model is now on device — let parked siblings re-probe.
+      invalidateAvailability(key);
+    }
+
     const disposable = instance as I & Partial<AsyncDisposable>;
     disposable[Symbol.asyncDispose] ??= () =>
       Promise.resolve(disposable.destroy());
+
     return disposable as I & AsyncDisposable;
   } finally {
     if (key) {

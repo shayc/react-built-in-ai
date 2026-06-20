@@ -18,7 +18,8 @@ import {
   UnsupportedError,
 } from "../../errors";
 import type { BuiltInAIName } from "../../is-supported";
-import { snapshotProgressFor } from "../progress-store";
+import { invalidateAvailability } from "../availability-store";
+import { buildProgressKey, snapshotProgressFor } from "../progress-store";
 import { makeAIFake } from "../testing/ai-namespace-fake";
 import { useLifecycle } from "./use-lifecycle";
 
@@ -854,5 +855,166 @@ describe("useLifecycle", () => {
     expect(instances[0].destroy).toHaveBeenCalledTimes(1);
     expect(instances[1].destroy).not.toHaveBeenCalled();
     expect(hookB.result.current.status).toBe("ready");
+  });
+
+  test("a sibling's download completion converges a parked 'downloadable' instance to ready, with no gesture and no 'downloading' flash", async () => {
+    let available = false;
+    const createOptions: { monitor?: unknown }[] = [];
+    const create = vi.fn((options: { monitor?: unknown }) => {
+      createOptions.push(options);
+      return Promise.resolve(buildInstance({ marker: "converged" }));
+    });
+    vi.stubGlobal(NAMESPACE, {
+      availability: vi.fn(() =>
+        Promise.resolve(available ? "available" : "downloadable"),
+      ),
+      create,
+    });
+
+    const observed: string[] = [];
+    const { result } = await renderHook(() => {
+      const lifecycle = useLifecycle<TestOptions, TestInstance>(
+        NAMESPACE,
+        undefined,
+      );
+      observed.push(lifecycle.status);
+      return lifecycle;
+    });
+    await vi.waitFor(() => expect(result.current.status).toBe("downloadable"));
+
+    // A sibling instance (or an imperative create*()) finishes the device-wide
+    // download. userActivation is never set, so convergence must be gesture-free.
+    available = true;
+    invalidateAvailability(NAMESPACE);
+
+    await vi.waitFor(() => expect(result.current.status).toBe("ready"));
+    expect(create).toHaveBeenCalledTimes(1);
+    // willDownload=false on the converging instance: no monitor, no refetch.
+    expect(createOptions[0].monitor).toBeUndefined();
+    // Never flashed "downloading" on the way to ready.
+    expect(observed).not.toContain("downloading");
+    expect(result.current.error).toBeNull();
+  });
+
+  test("an invalidation for a different config key leaves a parked instance untouched", async () => {
+    const availability = vi.fn(() => Promise.resolve("downloadable"));
+    const create = vi.fn(() => Promise.resolve(buildInstance()));
+    vi.stubGlobal(NAMESPACE, { availability, create });
+
+    const { result } = await renderHook(() =>
+      useLifecycle<TestOptions, TestInstance>(NAMESPACE, { mode: "a" }),
+    );
+    await vi.waitFor(() => expect(result.current.status).toBe("downloadable"));
+    const probesAtMount = availability.mock.calls.length;
+
+    // A different option set (different buildProgressKey) finished its download.
+    // Availability is per-config, so this instance must not re-probe or converge.
+    invalidateAvailability(buildProgressKey(NAMESPACE, { mode: "b" }));
+
+    expect(availability).toHaveBeenCalledTimes(probesAtMount);
+    expect(create).not.toHaveBeenCalled();
+    expect(result.current.status).toBe("downloadable");
+  });
+
+  test("a background convergence whose create() fails stays parked at 'downloadable', never 'error'", async () => {
+    let available = false;
+    const create = vi.fn(() => Promise.reject(new Error("create boom")));
+    vi.stubGlobal(NAMESPACE, {
+      availability: vi.fn(() =>
+        Promise.resolve(available ? "available" : "downloadable"),
+      ),
+      create,
+    });
+
+    const { result } = await renderHook(() =>
+      useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
+    );
+    await vi.waitFor(() => expect(result.current.status).toBe("downloadable"));
+
+    available = true;
+    invalidateAvailability(NAMESPACE);
+
+    // The re-probe finds "available" and attempts create(), which throws — but a
+    // background failure must not clobber a healthy parked store into "error".
+    await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(result.current.status).toBe("downloadable");
+    expect(result.current.error).toBeNull();
+  });
+
+  test("acquire() during a background convergence joins it and resolves without a gesture", async () => {
+    let available = false;
+    let resolveCreate!: (value: TestInstance) => void;
+    const inst = buildInstance({ marker: "join" });
+    const create = vi.fn(
+      () =>
+        new Promise<TestInstance>((resolve) => {
+          resolveCreate = resolve;
+        }),
+    );
+    vi.stubGlobal(NAMESPACE, {
+      availability: vi.fn(() =>
+        Promise.resolve(available ? "available" : "downloadable"),
+      ),
+      create,
+    });
+
+    const { result } = await renderHook(() =>
+      useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
+    );
+    await vi.waitFor(() => expect(result.current.status).toBe("downloadable"));
+
+    // A sibling completes → a silent background convergence is now in flight.
+    available = true;
+    invalidateAvailability(NAMESPACE);
+    await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+
+    // A reactive acquire() (no user gesture) lands mid-convergence: it must join
+    // the in-flight provision rather than throw MissingUserActivationError.
+    const pending = result.current.acquire();
+    resolveCreate(inst);
+
+    const acquired = await pending;
+    expect(acquired.instance).toBe(inst);
+    expect(result.current.status).toBe("ready");
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  test("a sibling hook's own download wakes a parked same-config instance end-to-end", async () => {
+    let downloaded = false;
+    const availability = vi.fn(() =>
+      Promise.resolve(downloaded ? "available" : "downloadable"),
+    );
+    const create = vi.fn(() => {
+      downloaded = true;
+      return Promise.resolve(buildInstance({ marker: "shared-model" }));
+    });
+    vi.stubGlobal(NAMESPACE, { availability, create });
+
+    // Two instances of the SAME config (same progress key) — e.g. a board-level
+    // chip and a Settings panel — mounted independently.
+    const board = await renderHook(() =>
+      useLifecycle<TestOptions, TestInstance>(NAMESPACE, { mode: "a" }),
+    );
+    const settings = await renderHook(() =>
+      useLifecycle<TestOptions, TestInstance>(NAMESPACE, { mode: "a" }),
+    );
+    await vi.waitFor(() =>
+      expect(board.result.current.status).toBe("downloadable"),
+    );
+    await vi.waitFor(() =>
+      expect(settings.result.current.status).toBe("downloadable"),
+    );
+
+    // The Settings panel performs the real download (with a gesture); its
+    // create-instance completion publishes the availability invalidation.
+    setUserActivation(true);
+    await settings.result.current.prepare();
+    expect(settings.result.current.status).toBe("ready");
+
+    // The board chip — never touched, never given its own gesture — re-probes
+    // and converges to ready on its own.
+    await vi.waitFor(() => expect(board.result.current.status).toBe("ready"));
+    expect(create).toHaveBeenCalledTimes(2);
   });
 });

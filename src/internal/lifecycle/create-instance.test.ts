@@ -5,6 +5,7 @@ import {
   UnsupportedError,
 } from "../../errors";
 import type { BuiltInAIName } from "../../is-supported";
+import { subscribeAvailability } from "../availability-store";
 import {
   clearDownloadProgress,
   setDownloadProgress,
@@ -231,5 +232,63 @@ describe("createInstance", () => {
     expect(snapshotProgressFor([NAMESPACE])).toBeNull();
     expect(snapshotProgressFor([OTHER_NAMESPACE])).toBe(0.42);
     clearDownloadProgress(OTHER_NAMESPACE);
+  });
+
+  test("announces availability invalidation for the key after a download completes", async () => {
+    setUserActivation(true);
+    vi.stubGlobal(NAMESPACE, {
+      availability: vi.fn(() => Promise.resolve("downloadable")),
+      create: vi.fn(() => Promise.resolve({ destroy: vi.fn() })),
+    });
+
+    const invalidated: string[] = [];
+    const unsubscribe = subscribeAvailability((key) => invalidated.push(key));
+
+    await createInstance<TestOptions, TestInstance>({
+      name: NAMESPACE,
+      options: { mode: "a" },
+    });
+
+    expect(invalidated).toEqual([`${NAMESPACE}:{"mode":"a"}`]);
+    unsubscribe();
+  });
+
+  test("does not announce availability invalidation on the available fast path", async () => {
+    vi.stubGlobal(NAMESPACE, {
+      availability: vi.fn(() => Promise.resolve("available")),
+      create: vi.fn(() => Promise.resolve({ destroy: vi.fn() })),
+    });
+
+    const invalidated: string[] = [];
+    const unsubscribe = subscribeAvailability((key) => invalidated.push(key));
+
+    await createInstance<TestOptions, TestInstance>({
+      name: NAMESPACE,
+      options: { mode: "a" },
+    });
+
+    expect(invalidated).toEqual([]);
+    unsubscribe();
+  });
+
+  test("does not announce availability invalidation when the download's create() fails", async () => {
+    setUserActivation(true);
+    vi.stubGlobal(NAMESPACE, {
+      availability: vi.fn(() => Promise.resolve("downloadable")),
+      create: vi.fn(() => Promise.reject(new Error("create boom"))),
+    });
+
+    const invalidated: string[] = [];
+    const unsubscribe = subscribeAvailability((key) => invalidated.push(key));
+
+    await expect(
+      createInstance<TestOptions, TestInstance>({
+        name: NAMESPACE,
+        options: { mode: "a" },
+      }),
+    ).rejects.toThrow("create boom");
+
+    expect(invalidated).toEqual([]);
+    unsubscribe();
   });
 });

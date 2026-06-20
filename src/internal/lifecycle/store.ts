@@ -7,6 +7,8 @@ import {
 } from "../../errors";
 import type { BuiltInAIName } from "../../is-supported";
 import type { Status } from "../../types";
+import { subscribeAvailability } from "../availability-store";
+import { buildProgressKey } from "../progress-store";
 import { abortError, mergeSignals, raceAbort } from "../signal";
 import { hasUserActivation } from "../user-activation";
 import { createInstance } from "./create-instance";
@@ -26,6 +28,7 @@ export interface Acquired<Model> {
 
 interface ProvisionOptions {
   showDownloadUI: boolean;
+  silent?: boolean;
 }
 
 type InternalState<Model> =
@@ -92,10 +95,12 @@ export function createStore<
 >(globalName: BuiltInAIName, readQuota: (instance: Model) => number = () => 0) {
   const listeners = new Set<() => void>();
 
-  // Epoch context, orthogonal to `state` — reset wholesale by start/stop. The
-  // controller's identity is the generation token acquire() checks after awaiting.
   let options: Options | undefined;
   let abortController = new AbortController();
+
+  let provisionInFlight: Promise<void> | null = null;
+  let progressKey = buildProgressKey(globalName, options);
+  let unsubscribeAvailability: (() => void) | null = null;
 
   let state: InternalState<Model> = { kind: "idle", probe: Promise.resolve() };
   let projectedFrom: InternalState<Model> = state;
@@ -112,8 +117,8 @@ export function createStore<
     notify();
   }
 
-  // `useSyncExternalStore` requires a referentially stable snapshot between
-  // changes; recompute the projection only when `state` identity changes.
+  // useSyncExternalStore needs a referentially stable snapshot; recompute only
+  // when `state` identity changes (a fresh object every call would loop renders).
   function getSnapshot(): Snapshot {
     if (state !== projectedFrom) {
       projectedFrom = state;
@@ -139,8 +144,6 @@ export function createStore<
         await provision(signal, { showDownloadUI: false });
         return;
       }
-      // "downloadable" or "downloading": a fetch is needed, and starting one
-      // requires a user gesture — park until prepare() or an action provides it.
       transition({ kind: "downloadable" });
     } catch (error) {
       if (signal.aborted) {
@@ -150,18 +153,62 @@ export function createStore<
     }
   }
 
-  function provision(
+  async function recheckAvailability(
+    changedKey: string,
     signal: AbortSignal,
-    { showDownloadUI }: ProvisionOptions,
   ): Promise<void> {
-    const task = runProvision(signal);
-    if (showDownloadUI) {
-      transition({ kind: "downloading", progress: 0, task });
+    if (signal.aborted || provisionInFlight || state.kind !== "downloadable") {
+      return;
     }
-    return task;
+    if (changedKey !== progressKey) {
+      return;
+    }
+    const namespace = getNamespace<Options, Model>(globalName);
+    if (!namespace) {
+      return;
+    }
+    let availability: Availability;
+    try {
+      availability = await namespace.availability(options);
+    } catch {
+      return;
+    }
+    if (signal.aborted || state.kind !== "downloadable") {
+      return;
+    }
+    if (availability === "available") {
+      await provision(signal, { showDownloadUI: false, silent: true });
+    } else if (availability === "unavailable") {
+      transition({ kind: "unavailable" });
+    }
   }
 
-  async function runProvision(signal: AbortSignal): Promise<void> {
+  function provision(
+    signal: AbortSignal,
+    { showDownloadUI, silent = false }: ProvisionOptions,
+  ): Promise<void> {
+    if (provisionInFlight) {
+      return provisionInFlight;
+    }
+    const task = runProvision(signal, silent);
+    const inFlight = task.finally(() => {
+      // Identity-checked: a stale task from a previous epoch must not clear the
+      // fresh token start() installed.
+      if (provisionInFlight === inFlight) {
+        provisionInFlight = null;
+      }
+    });
+    provisionInFlight = inFlight;
+    if (showDownloadUI) {
+      transition({ kind: "downloading", progress: 0, task: inFlight });
+    }
+    return inFlight;
+  }
+
+  async function runProvision(
+    signal: AbortSignal,
+    silent = false,
+  ): Promise<void> {
     try {
       const created = await createInstance<Options, Model>({
         name: globalName,
@@ -193,6 +240,8 @@ export function createStore<
         transition({ kind: "unsupported" });
       } else if (error instanceof UnavailableError) {
         transition({ kind: "unavailable" });
+      } else if (silent) {
+        return;
       } else {
         transition({ kind: "error", error: wrap(error) });
       }
@@ -229,13 +278,14 @@ export function createStore<
           await awaitTask(current.task, callerSignal);
           continue;
         case "downloadable":
+          if (provisionInFlight) {
+            await awaitTask(provisionInFlight, callerSignal);
+            continue;
+          }
           kickoff();
           continue;
         case "idle":
           await awaitTask(current.probe, callerSignal);
-          // A settled probe always transitions out of idle, so this is
-          // unreachable today — kept so a future settle path that forgets to
-          // transition fails through kickoff()'s gate instead of spinning.
           if (state.kind === "idle") {
             kickoff();
           }
@@ -251,18 +301,30 @@ export function createStore<
     void provision(abortController.signal, { showDownloadUI: true });
   }
 
-  function start(nextOptions: Options | undefined): void {
-    abortController.abort(abortError("lifecycle reset"));
-    abortController = new AbortController();
+  function teardownEpoch(reason: string): void {
+    abortController.abort(abortError(reason));
+    provisionInFlight = null;
+    unsubscribeAvailability?.();
+    unsubscribeAvailability = null;
     if (state.kind === "ready") {
       destroyQuietly(state.instance);
     }
+  }
+
+  function start(nextOptions: Options | undefined): void {
+    teardownEpoch("lifecycle reset");
+    abortController = new AbortController();
     options = nextOptions;
+    progressKey = buildProgressKey(globalName, options);
     const namespace = getNamespace<Options, Model>(globalName);
     if (!namespace) {
       transition({ kind: "unsupported" });
       return;
     }
+    const epoch = abortController;
+    unsubscribeAvailability = subscribeAvailability((changedKey) => {
+      void recheckAvailability(changedKey, epoch.signal);
+    });
     transition({
       kind: "idle",
       probe: checkAvailability(namespace, abortController.signal),
@@ -270,10 +332,7 @@ export function createStore<
   }
 
   function stop(): void {
-    abortController.abort(abortError("lifecycle unmounted"));
-    if (state.kind === "ready") {
-      destroyQuietly(state.instance);
-    }
+    teardownEpoch("lifecycle unmounted");
     transition({ kind: "idle", probe: Promise.resolve() });
   }
 
@@ -296,8 +355,8 @@ export function createStore<
   ): Promise<Acquired<Model>> => {
     const epoch = abortController;
     await ensureReady(callerSignal);
-    // start() during the await installs a fresh controller — a different
-    // identity means our generation was reset out from under us (config change).
+    // abortController's identity is a generation token: a different one after the
+    // await means start() reset our epoch out from under us (config change).
     if (epoch !== abortController) {
       throw new NotReadyError();
     }
@@ -305,7 +364,6 @@ export function createStore<
     if (merged.aborted) {
       throw merged.reason;
     }
-    // Provably "ready" in an unchanged epoch; the guard narrows `state.instance`.
     if (state.kind !== "ready") {
       throw new NotReadyError();
     }
