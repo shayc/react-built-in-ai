@@ -980,6 +980,28 @@ describe("useLifecycle", () => {
     expect(create).toHaveBeenCalledTimes(1);
   });
 
+  test("unsubscribes from availability invalidation on unmount (no leak)", async () => {
+    const availability = vi.fn(() => Promise.resolve("downloadable"));
+    const create = vi.fn(() => Promise.resolve(buildInstance()));
+    vi.stubGlobal(NAMESPACE, { availability, create });
+
+    const { result, unmount } = await renderHook(() =>
+      useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
+    );
+    await vi.waitFor(() => expect(result.current.status).toBe("downloadable"));
+    const probesBeforeUnmount = availability.mock.calls.length;
+
+    await unmount();
+
+    // The unmounted store must be unsubscribed: an invalidation for its key
+    // triggers no re-probe and no create.
+    invalidateAvailability(NAMESPACE);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(availability).toHaveBeenCalledTimes(probesBeforeUnmount);
+    expect(create).not.toHaveBeenCalled();
+  });
+
   test("a sibling hook's own download wakes a parked same-config instance end-to-end", async () => {
     let downloaded = false;
     const availability = vi.fn(() =>

@@ -171,6 +171,7 @@ export function createStore<
     try {
       availability = await namespace.availability(options);
     } catch {
+      // A background re-probe must not fault a healthy parked store — stay parked.
       return;
     }
     if (signal.aborted || state.kind !== "downloadable") {
@@ -286,6 +287,9 @@ export function createStore<
           continue;
         case "idle":
           await awaitTask(current.probe, callerSignal);
+          // A settled probe always leaves idle, so this is unreachable today —
+          // kept so a future settle path that forgets to transition fails through
+          // kickoff()'s gate instead of spinning.
           if (state.kind === "idle") {
             kickoff();
           }
