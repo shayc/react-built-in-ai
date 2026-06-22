@@ -6,6 +6,8 @@ A thin React layer over the browser's [Built-in AI](https://developer.chrome.com
 [![CI](https://github.com/shayc/react-built-in-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/shayc/react-built-in-ai/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/npm/l/@shayc/react-built-in-ai.svg)](LICENSE)
 
+**Browser support** — Chromium only (Chrome 138+, Edge); not Firefox or Safari. The Built-in AI globals are gated by Chrome flags / origin trial and absent on unsupported builds — feature-detect with [`isSupported()`](#capability-check) and render a fallback.
+
 ## Install
 
 ```bash
