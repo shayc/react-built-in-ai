@@ -1,9 +1,9 @@
 import { useSyncExternalStore } from "react";
-import type { BuiltInAIName } from "./is-supported";
 import {
-  snapshotProgressFor,
-  subscribeProgress,
-} from "./internal/progress-store";
+  snapshotDownloadProgress,
+  subscribeDownloads,
+} from "./internal/lifecycle/registry";
+import type { BuiltInAIName } from "./is-supported";
 
 /**
  * Progress of the least-complete in-flight download across built-in AI
@@ -38,8 +38,8 @@ export function useGlobalDownloadProgress(
 ): number | null {
   const prefixes = toPrefixes(namespaces);
   return useSyncExternalStore(
-    subscribeProgress,
-    () => snapshotProgressFor(prefixes),
+    subscribeDownloads,
+    () => snapshotDownloadProgress(prefixes),
     // No download can be in flight during SSR.
     () => null,
   );

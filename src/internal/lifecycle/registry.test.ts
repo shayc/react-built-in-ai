@@ -1,15 +1,15 @@
 import { describe, expect, test } from "vitest";
-import { buildProgressKey } from "./progress-store";
+import { buildKey } from "./registry";
 
-describe("buildProgressKey", () => {
+describe("buildKey", () => {
   test("returns the bare name when options are empty or undefined", () => {
-    expect(buildProgressKey("Summarizer", undefined)).toBe("Summarizer");
-    expect(buildProgressKey("Summarizer", {})).toBe("Summarizer");
+    expect(buildKey("Summarizer", undefined)).toBe("Summarizer");
+    expect(buildKey("Summarizer", {})).toBe("Summarizer");
   });
 
   test("appends a JSON-stringified options suffix when present", () => {
     expect(
-      buildProgressKey("Translator", {
+      buildKey("Translator", {
         sourceLanguage: "en",
         targetLanguage: "fr",
       }),
@@ -17,11 +17,11 @@ describe("buildProgressKey", () => {
   });
 
   test("is order-independent across differently-ordered option objects", () => {
-    const a = buildProgressKey("Translator", {
+    const a = buildKey("Translator", {
       sourceLanguage: "en",
       targetLanguage: "fr",
     });
-    const b = buildProgressKey("Translator", {
+    const b = buildKey("Translator", {
       targetLanguage: "fr",
       sourceLanguage: "en",
     });

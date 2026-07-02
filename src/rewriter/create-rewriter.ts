@@ -1,4 +1,4 @@
-import { createInstance } from "../internal/lifecycle/create-instance";
+import { provisionStandalone } from "../internal/lifecycle/provision";
 import type { RewriterOptions } from "./use-rewriter";
 
 /**
@@ -32,9 +32,9 @@ export async function createRewriter(
   options: CreateRewriterOptions = {},
 ): Promise<Rewriter & AsyncDisposable> {
   const { signal, ...createOptions } = options;
-  return createInstance<typeof createOptions, Rewriter>({
-    name: "Rewriter",
-    options: createOptions,
+  return provisionStandalone<typeof createOptions, Rewriter>(
+    "Rewriter",
+    createOptions,
     signal,
-  });
+  );
 }

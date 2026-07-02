@@ -1,4 +1,4 @@
-import { createInstance } from "../internal/lifecycle/create-instance";
+import { provisionStandalone } from "../internal/lifecycle/provision";
 import type { WriterOptions } from "./use-writer";
 
 /**
@@ -32,9 +32,9 @@ export async function createWriter(
   options: CreateWriterOptions = {},
 ): Promise<Writer & AsyncDisposable> {
   const { signal, ...createOptions } = options;
-  return createInstance<typeof createOptions, Writer>({
-    name: "Writer",
-    options: createOptions,
+  return provisionStandalone<typeof createOptions, Writer>(
+    "Writer",
+    createOptions,
     signal,
-  });
+  );
 }

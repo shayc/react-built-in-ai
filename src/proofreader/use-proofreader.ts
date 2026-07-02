@@ -44,6 +44,7 @@ export interface ProofreaderHookReturn extends BaseHookReturn {
  * @example
  * ```tsx
  * function Proof({ text }: { text: string }) {
+ *   const [corrections, setCorrections] = useState<ProofreadCorrection[]>([]);
  *   const proofreader = useProofreader({ includeCorrectionTypes: true });
  *   return (
  *     <button

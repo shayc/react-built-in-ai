@@ -87,11 +87,15 @@ Every hook exposes `status`, `progress`, `error`, and `prepare`. `status` is alw
 
 - **`unsupported`** — the global namespace is missing on this browser.
 - **`unavailable`** — the model reports it cannot run on this device.
-- **`idle`** — supported; probing availability. An already-downloaded model passes through to `ready` on its own.
-- **`downloadable`** — the model needs a download, which the browser only starts from a **user activation**. Render your download affordance off this state; `prepare()` (or any action method) called from a user gesture moves it along. Mirrors the browser's `availability()` vocabulary.
+- **`checking`** — supported; probing availability, or quietly creating an already-downloaded model. Passes through to `ready` on its own.
+- **`downloadable`** — the model needs a download, which the browser only starts from a **user activation**. Render your download affordance off this state; `prepare()` (or any action method) called from a user gesture moves it along. Mirrors the browser's `availability()` vocabulary. A gesture-less call re-checks once before failing, in case the model finished downloading elsewhere (another component, another tab) since this hook last checked.
 - **`downloading`** — the fetch is running. `progress` ticks from `0` to `1`.
 - **`ready`** — the instance is live; action methods can be called freely.
 - **`error`** — `availability()` or `create()` rejected. Call `prepare()` (from a user activation if a download is required) to tear down and re-initialize.
+
+### Instance sharing
+
+Hooks with equal options — same namespace, same options by value — share one underlying model instance and one `status`/`progress`/`error`. The instance is created on the first mount that needs it and torn down when the last component using those options unmounts; everything in between (including a `prepare()` retry from `error`) is visible to every component sharing it. This means two components — say, a settings panel showing download status and a toolbar actually using the model — stay in sync automatically as long as they're called with the same options.
 
 ## Usage
 
@@ -121,7 +125,7 @@ function Demo() {
       }}
     >
       {translator.status === "downloading"
-        ? `Downloading (${translator.progress * 100}%)`
+        ? `Downloading (${(translator.progress ?? 0) * 100}%)`
         : "Translate"}
     </button>
   );
@@ -166,8 +170,8 @@ Because a creator requires a user activation when a download is needed, prefer c
 
 ## Download progress
 
-- **Per-instance** — read `progress` and `status` from the hook return (or the creator's lifecycle, which writes to the same place).
-- **Cross-instance** — `useGlobalDownloadProgress(namespaces?)` reports the progress of the least-complete in-flight download across every instance, regardless of which component (or imperative caller) initiated the download. The value never moves backwards when one of several downloads finishes, and returns to `null` once all of them complete — finished downloads leave the store, so key "done" off `null`, not `progress === 1`. Pass a namespace (`"Translator"`, `"Rewriter"`, `"Proofreader"`, `"Summarizer"`, `"Writer"`, `"LanguageDetector"`) or an array of namespaces to scope the aggregation, or call with no argument to track all Built-in AI downloads.
+- **Per-instance** — read `progress` and `status` from the hook return, or from a creator's own thrown/awaited lifecycle.
+- **Cross-instance** — `useGlobalDownloadProgress(namespaces?)` reports the progress of the least-complete in-flight download across every instance, regardless of which component (or imperative caller) initiated the download. The value never moves backwards when one of several downloads finishes, and returns to `null` once all of them complete — finished downloads stop being tracked, so key "done" off `null`, not `progress === 1`. Pass a namespace (`"Translator"`, `"Rewriter"`, `"Proofreader"`, `"Summarizer"`, `"Writer"`, `"LanguageDetector"`) or an array of namespaces to scope the aggregation, or call with no argument to track all Built-in AI downloads.
 
 ```tsx
 function GlobalDownloadBar() {

@@ -9,12 +9,12 @@ import type { BuiltInAIName } from "../../is-supported";
 import type { Status } from "../../types";
 import { abortError, mergeSignals, raceAbort } from "../signal";
 import { hasUserActivation } from "../user-activation";
-import { createInstance } from "./create-instance";
+import { provisionInstance } from "./provision";
 import { getNamespace, type AINamespace } from "./types";
 
 export interface Snapshot {
   status: Status;
-  progress: number;
+  progress: number | null;
   error: BuiltInAIError | null;
   inputQuota: number;
 }
@@ -29,7 +29,7 @@ interface ProvisionOptions {
 }
 
 type InternalState<Model> =
-  | { kind: "idle"; probe: Promise<void> }
+  | { kind: "checking"; probe: Promise<void> }
   | { kind: "downloadable" }
   | { kind: "downloading"; progress: number; task: Promise<void> }
   | { kind: "ready"; instance: Model; inputQuota: number }
@@ -49,19 +49,19 @@ function toSnapshot<Model>(state: InternalState<Model>): Snapshot {
     case "ready":
       return {
         status: "ready",
-        progress: 0,
+        progress: null,
         error: null,
         inputQuota: state.inputQuota,
       };
     case "error":
       return {
         status: "error",
-        progress: 0,
+        progress: null,
         error: state.error,
         inputQuota: 0,
       };
     default:
-      return { status: state.kind, progress: 0, error: null, inputQuota: 0 };
+      return { status: state.kind, progress: null, error: null, inputQuota: 0 };
   }
 }
 
@@ -89,15 +89,24 @@ function destroyQuietly(instance: DestroyableModel | null | undefined): void {
 export function createStore<
   Options extends object,
   Model extends DestroyableModel,
->(globalName: BuiltInAIName, readQuota: (instance: Model) => number = () => 0) {
+>(
+  globalName: BuiltInAIName,
+  options: Options | undefined,
+  readQuota: (instance: Model) => number = () => 0,
+) {
   const listeners = new Set<() => void>();
 
   // Epoch context, orthogonal to `state` — reset wholesale by start/stop. The
-  // controller's identity is the generation token acquire() checks after awaiting.
-  let options: Options | undefined;
+  // controller's identity is the generation token acquire() checks after
+  // awaiting. `options` is fixed for this store's lifetime — a different
+  // options value is a different registry key, hence a different store.
+  let namespace: AINamespace<Options, Model> | undefined;
   let abortController = new AbortController();
 
-  let state: InternalState<Model> = { kind: "idle", probe: Promise.resolve() };
+  let state: InternalState<Model> = {
+    kind: "checking",
+    probe: Promise.resolve(),
+  };
   let projectedFrom: InternalState<Model> = state;
   let projection: Snapshot = toSnapshot(state);
 
@@ -122,12 +131,14 @@ export function createStore<
     return projection;
   }
 
-  async function checkAvailability(
-    namespace: AINamespace<Options, Model>,
-    signal: AbortSignal,
-  ): Promise<void> {
+  // Probes availability and settles the store: "unavailable" is terminal,
+  // "available" provisions immediately, anything else parks at "downloadable".
+  // Used both for the initial probe (from start()) and to revalidate a parked
+  // store without a gesture (from ensureReady()'s "downloadable" case) — both
+  // are "is a download still actually required?" questions with the same answer.
+  async function checkAvailability(signal: AbortSignal): Promise<void> {
     try {
-      const availability = await namespace.availability(options);
+      const availability = await namespace!.availability(options);
       if (signal.aborted) {
         return;
       }
@@ -136,7 +147,7 @@ export function createStore<
         return;
       }
       if (availability === "available") {
-        await provision(signal, { showDownloadUI: false });
+        await provision(signal, { showDownloadUI: false }, availability);
         return;
       }
       // "downloadable" or "downloading": a fetch is needed, and starting one
@@ -153,19 +164,24 @@ export function createStore<
   function provision(
     signal: AbortSignal,
     { showDownloadUI }: ProvisionOptions,
+    availability: Availability,
   ): Promise<void> {
-    const task = runProvision(signal);
+    const task = runProvision(signal, availability);
     if (showDownloadUI) {
       transition({ kind: "downloading", progress: 0, task });
     }
     return task;
   }
 
-  async function runProvision(signal: AbortSignal): Promise<void> {
+  async function runProvision(
+    signal: AbortSignal,
+    availability: Availability,
+  ): Promise<void> {
     try {
-      const created = await createInstance<Options, Model>({
-        name: globalName,
+      const created = await provisionInstance<Options, Model>({
+        namespace: namespace!,
         options,
+        availability,
         signal,
         onProgress: (progress) => {
           if (signal.aborted) {
@@ -193,6 +209,11 @@ export function createStore<
         transition({ kind: "unsupported" });
       } else if (error instanceof UnavailableError) {
         transition({ kind: "unavailable" });
+      } else if (error instanceof MissingUserActivationError) {
+        // kickoff() no longer gates on activation itself (see below) — this is
+        // the actual gate, reached only when a caller drove provisioning
+        // without one. Re-park rather than surface as a hard error.
+        transition({ kind: "downloadable" });
       } else {
         transition({ kind: "error", error: wrap(error) });
       }
@@ -214,6 +235,10 @@ export function createStore<
   }
 
   async function ensureReady(callerSignal?: AbortSignal): Promise<void> {
+    // Bounds the "downloadable" case's gesture-less revalidation to one probe
+    // per call — without it, availability repeatedly answering "downloadable"
+    // would retry forever instead of surfacing MissingUserActivationError.
+    let reprobed = false;
     while (true) {
       const current = state;
       switch (current.kind) {
@@ -229,14 +254,30 @@ export function createStore<
           await awaitTask(current.task, callerSignal);
           continue;
         case "downloadable":
-          kickoff();
+          if (hasUserActivation()) {
+            kickoff();
+            continue;
+          }
+          // No gesture: the model may have finished downloading elsewhere
+          // (another component's hook, another tab) since this store last
+          // checked. Re-probe once — if it's genuinely still downloadable,
+          // stay parked and require a gesture as before.
+          if (reprobed) {
+            throw new MissingUserActivationError();
+          }
+          reprobed = true;
+          transition({
+            kind: "checking",
+            probe: checkAvailability(abortController.signal),
+          });
           continue;
-        case "idle":
+        case "checking":
           await awaitTask(current.probe, callerSignal);
-          // A settled probe always transitions out of idle, so this is
+          // A settled probe always transitions out of "checking", so this is
           // unreachable today — kept so a future settle path that forgets to
-          // transition fails through kickoff()'s gate instead of spinning.
-          if (state.kind === "idle") {
+          // transition fails through kickoff() without a gesture instead of
+          // spinning (runProvision() re-parks on MissingUserActivationError).
+          if (state.kind === "checking") {
             kickoff();
           }
           continue;
@@ -245,27 +286,35 @@ export function createStore<
   }
 
   function kickoff(): void {
-    if (!hasUserActivation()) {
-      throw new MissingUserActivationError();
-    }
-    void provision(abortController.signal, { showDownloadUI: true });
+    // No activation gate here — provisionInstance() is the single gate for
+    // the whole library. Callers that already confirmed a gesture (the
+    // "downloadable" case above) pass straight through; a caller that
+    // didn't gets MissingUserActivationError from runProvision(), which
+    // re-parks at "downloadable" rather than erroring out.
+    void provision(
+      abortController.signal,
+      { showDownloadUI: true },
+      "downloadable",
+    );
   }
 
-  function start(nextOptions: Options | undefined): void {
+  // Called once by the registry when this store is first retained, and
+  // again by prepare()'s error-retry — options never change, so there's
+  // nothing else that would need a restart.
+  function start(): void {
     abortController.abort(abortError("lifecycle reset"));
     abortController = new AbortController();
     if (state.kind === "ready") {
       destroyQuietly(state.instance);
     }
-    options = nextOptions;
-    const namespace = getNamespace<Options, Model>(globalName);
+    namespace = getNamespace<Options, Model>(globalName);
     if (!namespace) {
       transition({ kind: "unsupported" });
       return;
     }
     transition({
-      kind: "idle",
-      probe: checkAvailability(namespace, abortController.signal),
+      kind: "checking",
+      probe: checkAvailability(abortController.signal),
     });
   }
 
@@ -274,7 +323,7 @@ export function createStore<
     if (state.kind === "ready") {
       destroyQuietly(state.instance);
     }
-    transition({ kind: "idle", probe: Promise.resolve() });
+    transition({ kind: "checking", probe: Promise.resolve() });
   }
 
   const subscribe = (listener: () => void): (() => void) => {
@@ -286,7 +335,7 @@ export function createStore<
 
   const prepare = async (): Promise<void> => {
     if (state.kind === "error") {
-      start(options);
+      start();
     }
     await ensureReady();
   };
@@ -297,9 +346,14 @@ export function createStore<
     const epoch = abortController;
     await ensureReady(callerSignal);
     // start() during the await installs a fresh controller — a different
-    // identity means our generation was reset out from under us (config change).
+    // identity means our generation was reset out from under us (only
+    // prepare()'s error-retry restarts an already-retained store). The old
+    // epoch's controller was aborted, so this is a cancellation, not a
+    // failure — surface it as one.
     if (epoch !== abortController) {
-      throw new NotReadyError();
+      throw abortError(
+        "Built-in AI lifecycle reset while the request was in flight",
+      );
     }
     const merged = mergeSignals(epoch.signal, callerSignal);
     if (merged.aborted) {

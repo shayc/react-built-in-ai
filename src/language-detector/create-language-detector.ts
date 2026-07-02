@@ -1,4 +1,4 @@
-import { createInstance } from "../internal/lifecycle/create-instance";
+import { provisionStandalone } from "../internal/lifecycle/provision";
 import type { LanguageDetectorOptions } from "./use-language-detector";
 
 /**
@@ -33,9 +33,9 @@ export async function createLanguageDetector(
   options: CreateLanguageDetectorOptions = {},
 ): Promise<LanguageDetector & AsyncDisposable> {
   const { signal, ...createOptions } = options;
-  return createInstance<typeof createOptions, LanguageDetector>({
-    name: "LanguageDetector",
-    options: createOptions,
+  return provisionStandalone<typeof createOptions, LanguageDetector>(
+    "LanguageDetector",
+    createOptions,
     signal,
-  });
+  );
 }

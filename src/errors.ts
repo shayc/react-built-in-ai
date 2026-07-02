@@ -40,7 +40,7 @@ export class MissingUserActivationError extends BuiltInAIError {
   }
 }
 
-/** The model isn't ready — a prior `create()` rejected (inspect `.cause`), or the lifecycle reset mid-request. */
+/** A prior `create()` rejected; the lifecycle is stuck in an error state until `prepare()` retries. Inspect `.cause` for the underlying rejection. */
 export class NotReadyError extends BuiltInAIError {
   override name = "NotReadyError";
   constructor(cause?: unknown) {

@@ -18,8 +18,13 @@ import {
   UnsupportedError,
 } from "../../errors";
 import type { BuiltInAIName } from "../../is-supported";
-import { snapshotProgressFor } from "../progress-store";
 import { makeAIFake } from "../testing/ai-namespace-fake";
+import {
+  __resetForTests,
+  __sizeForTests,
+  snapshotDownloadProgress,
+} from "./registry";
+import { createStore } from "./store";
 import { useLifecycle } from "./use-lifecycle";
 
 interface TestOptions {
@@ -47,6 +52,12 @@ function setUserActivation(isActive: boolean): void {
 
 beforeEach(() => {
   setUserActivation(false);
+  // The registry is module-level state that outlives any single test. The
+  // browser test runner unmounts rendered hooks between tests (releasing
+  // their retains), but this is a deterministic backstop against leaks —
+  // e.g. a test that constructs a store directly (bypassing the registry
+  // and vitest-browser-react's auto-unmount) and forgets to release it.
+  __resetForTests();
 });
 
 afterEach(() => {
@@ -112,7 +123,7 @@ describe("useLifecycle", () => {
     });
 
     await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(1));
-    expect(result.current.status).toBe("idle");
+    expect(result.current.status).toBe("checking");
     expect(observed).not.toContain("downloading");
 
     resolveCreate(inst);
@@ -207,7 +218,7 @@ describe("useLifecycle", () => {
     expect(createArg.monitor).toBeTypeOf("function");
   });
 
-  test("writes 0 to the shared progress store as soon as download starts", async () => {
+  test("is visible in the global download-progress aggregate as soon as download starts, and clears on completion", async () => {
     let resolveCreate!: (value: TestInstance) => void;
     const create = vi.fn(
       () =>
@@ -230,11 +241,15 @@ describe("useLifecycle", () => {
     result.current.prepare().catch(() => undefined);
     await vi.waitFor(() => expect(result.current.status).toBe("downloading"));
 
-    expect(snapshotProgressFor([NAMESPACE])).toBe(0);
+    // The registry derives this straight from the store's own snapshot —
+    // no separate write path to keep in sync.
+    expect(result.current.progress).toBe(0);
+    expect(snapshotDownloadProgress([NAMESPACE])).toBe(0);
 
     resolveCreate(buildInstance());
     await vi.waitFor(() => expect(result.current.status).toBe("ready"));
-    expect(snapshotProgressFor([NAMESPACE])).toBeNull();
+    expect(result.current.progress).toBeNull();
+    expect(snapshotDownloadProgress([NAMESPACE])).toBeNull();
   });
 
   test("emits progress via downloadprogress events while creating", async () => {
@@ -614,7 +629,7 @@ describe("useLifecycle", () => {
     expect(second.destroy).not.toHaveBeenCalled();
   });
 
-  test("server-renders the idle snapshot instead of crashing on a missing getServerSnapshot", () => {
+  test("server-renders the checking snapshot instead of crashing on a missing getServerSnapshot", () => {
     function Probe(): string {
       const lifecycle = useLifecycle<TestOptions, TestInstance>(
         NAMESPACE,
@@ -623,7 +638,7 @@ describe("useLifecycle", () => {
       return lifecycle.status;
     }
 
-    expect(renderToString(createElement(Probe))).toBe("idle");
+    expect(renderToString(createElement(Probe))).toBe("checking");
   });
 
   test("acquire() rejects with MissingUserActivationError when downloadable without activation", async () => {
@@ -749,6 +764,9 @@ describe("useLifecycle", () => {
     );
     expect(live).toHaveLength(1);
     expect(create.mock.calls.length).toBeGreaterThanOrEqual(1);
+    // The double mount/unmount/mount refCount churn must settle on exactly
+    // one retained registry entry, not an orphan left behind by the stale pass.
+    expect(__sizeForTests()).toBe(1);
   });
 
   test("two concurrent prepare() during downloading share a single create call", async () => {
@@ -821,7 +839,7 @@ describe("useLifecycle", () => {
       useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
     );
     await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(1));
-    expect(result.current.status).toBe("idle");
+    expect(result.current.status).toBe("checking");
 
     const pending = result.current.acquire();
     resolveCreate(inst);
@@ -854,5 +872,275 @@ describe("useLifecycle", () => {
     expect(instances[0].destroy).toHaveBeenCalledTimes(1);
     expect(instances[1].destroy).not.toHaveBeenCalled();
     expect(hookB.result.current.status).toBe("ready");
+  });
+
+  describe("parked 'downloadable' revalidation (P1)", () => {
+    test("a gesture-less action succeeds once the model becomes available elsewhere", async () => {
+      // Simulates another component (or tab) finishing the download: the
+      // first probe parks at "downloadable"; the second (the re-probe) finds
+      // it already "available" and provisions quietly, no gesture required.
+      let calls = 0;
+      const availability = vi.fn(() =>
+        Promise.resolve(calls++ === 0 ? "downloadable" : "available"),
+      );
+      const create = vi.fn<
+        (opts?: { monitor?: unknown }) => Promise<TestInstance>
+      >(() => Promise.resolve(buildInstance()));
+      vi.stubGlobal(NAMESPACE, { availability, create });
+
+      const { result } = await renderHook(() =>
+        useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
+      );
+      await vi.waitFor(() =>
+        expect(result.current.status).toBe("downloadable"),
+      );
+
+      // No setUserActivation(true) — the default from beforeEach is false.
+      const acquired = await result.current.acquire();
+
+      expect(acquired.instance).toBeDefined();
+      expect(result.current.status).toBe("ready");
+      expect(create).toHaveBeenCalledTimes(1);
+      const [createArg] = create.mock.calls[0] as [{ monitor?: unknown }];
+      expect(createArg.monitor).toBeUndefined();
+    });
+
+    test("stays parked and throws once when the re-probe still reports downloadable", async () => {
+      const availability = vi.fn(() =>
+        Promise.resolve("downloadable" as const),
+      );
+      const create = vi.fn();
+      vi.stubGlobal(NAMESPACE, { availability, create });
+
+      const { result } = await renderHook(() =>
+        useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
+      );
+      await vi.waitFor(() =>
+        expect(result.current.status).toBe("downloadable"),
+      );
+      const callsAtPark = availability.mock.calls.length;
+
+      await expect(result.current.acquire()).rejects.toBeInstanceOf(
+        MissingUserActivationError,
+      );
+
+      expect(result.current.status).toBe("downloadable");
+      expect(create).not.toHaveBeenCalled();
+      // Bounded: exactly one re-probe beyond the initial park, not a spin.
+      expect(availability.mock.calls.length).toBe(callsAtPark + 1);
+    });
+
+    test("two concurrent gesture-less actions on a parked-then-available store share a single create() call", async () => {
+      let calls = 0;
+      const availability = vi.fn(() =>
+        Promise.resolve(calls++ === 0 ? "downloadable" : "available"),
+      );
+      const instance = buildInstance({ marker: "shared" });
+      const create = vi.fn(() => Promise.resolve(instance));
+      vi.stubGlobal(NAMESPACE, { availability, create });
+
+      const { result } = await renderHook(() =>
+        useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
+      );
+      await vi.waitFor(() =>
+        expect(result.current.status).toBe("downloadable"),
+      );
+
+      const [a, b] = await Promise.all([
+        result.current.acquire(),
+        result.current.acquire(),
+      ]);
+
+      expect(a.instance).toBe(instance);
+      expect(b.instance).toBe(instance);
+      expect(create).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("lifecycle reset while a request is in flight (P2)", () => {
+    test("acquire() rejects with AbortError, not NotReadyError, when the epoch resets after ensureReady() settles", async () => {
+      // Constructed against the store directly: the race is a single
+      // microtask window between ensureReady() resolving and acquire()'s
+      // epoch check, too narrow to force deterministically through React's
+      // scheduler.
+      const instance = buildInstance();
+      vi.stubGlobal(NAMESPACE, {
+        availability: vi.fn(() => Promise.resolve("available")),
+        create: vi.fn(() => Promise.resolve(instance)),
+      });
+
+      const store = createStore<TestOptions, TestInstance>(
+        NAMESPACE,
+        undefined,
+      );
+      store.start();
+      await vi.waitFor(() => expect(store.getSnapshot().status).toBe("ready"));
+
+      // acquire() synchronously resolves ensureReady() (state is already
+      // "ready"), queuing its post-await continuation as a microtask. The
+      // very next synchronous statement resets the epoch before that
+      // continuation runs.
+      const pending = store.acquire();
+      store.start();
+
+      await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+      store.stop();
+    });
+  });
+
+  describe("instance sharing (registry)", () => {
+    test("two components with equal options share one store: one create() call, both report ready", async () => {
+      const { Fake, create, instances } = makeAIFake({
+        status: "available",
+        buildInstance: () => buildInstance({ marker: "shared" }),
+      });
+      vi.stubGlobal(NAMESPACE, Fake);
+
+      const hookA = await renderHook(() =>
+        useLifecycle<TestOptions, TestInstance>(NAMESPACE, { mode: "shared" }),
+      );
+      const hookB = await renderHook(() =>
+        useLifecycle<TestOptions, TestInstance>(NAMESPACE, { mode: "shared" }),
+      );
+
+      await vi.waitFor(() => expect(hookA.result.current.status).toBe("ready"));
+      await vi.waitFor(() => expect(hookB.result.current.status).toBe("ready"));
+
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(instances).toHaveLength(1);
+      expect(__sizeForTests()).toBe(1);
+    });
+
+    test("unmounting one of two holders leaves the instance alive; unmounting the last destroys it", async () => {
+      const inst = buildInstance({ marker: "refcounted" });
+      const { Fake } = makeAIFake({
+        status: "available",
+        buildInstance: () => inst,
+      });
+      vi.stubGlobal(NAMESPACE, Fake);
+
+      const hookA = await renderHook(() =>
+        useLifecycle<TestOptions, TestInstance>(NAMESPACE, { mode: "shared" }),
+      );
+      const hookB = await renderHook(() =>
+        useLifecycle<TestOptions, TestInstance>(NAMESPACE, { mode: "shared" }),
+      );
+      await vi.waitFor(() => expect(hookA.result.current.status).toBe("ready"));
+      await vi.waitFor(() => expect(hookB.result.current.status).toBe("ready"));
+
+      await hookA.unmount();
+      expect(inst.destroy).not.toHaveBeenCalled();
+      expect(hookB.result.current.status).toBe("ready");
+
+      await hookB.unmount();
+      expect(inst.destroy).toHaveBeenCalledTimes(1);
+      expect(__sizeForTests()).toBe(0);
+    });
+
+    test("a remount with the same options right after the last unmount reaches ready with a fresh instance", async () => {
+      const first = buildInstance({ marker: "one" });
+      const second = buildInstance({ marker: "two" });
+      const queue: TestInstance[] = [first, second];
+      const { Fake, create } = makeAIFake({
+        status: "available",
+        buildInstance: () => queue.shift()!,
+      });
+      vi.stubGlobal(NAMESPACE, Fake);
+
+      const hookA = await renderHook(() =>
+        useLifecycle<TestOptions, TestInstance>(NAMESPACE, {
+          mode: "resurrect",
+        }),
+      );
+      await vi.waitFor(() => expect(hookA.result.current.status).toBe("ready"));
+      await hookA.unmount();
+      expect(first.destroy).toHaveBeenCalledTimes(1);
+
+      const hookB = await renderHook(() =>
+        useLifecycle<TestOptions, TestInstance>(NAMESPACE, {
+          mode: "resurrect",
+        }),
+      );
+      await vi.waitFor(() => expect(hookB.result.current.status).toBe("ready"));
+
+      expect(create).toHaveBeenCalledTimes(2);
+      expect(__sizeForTests()).toBe(1);
+    });
+
+    test("two hook calls with the same options in one component converge without a render loop", async () => {
+      const { Fake, create, instances } = makeAIFake({
+        status: "available",
+        buildInstance: () => buildInstance(),
+      });
+      vi.stubGlobal(NAMESPACE, Fake);
+
+      let renders = 0;
+      const { result } = await renderHook(() => {
+        renders++;
+        const a = useLifecycle<TestOptions, TestInstance>(NAMESPACE, {
+          mode: "dual",
+        });
+        const b = useLifecycle<TestOptions, TestInstance>(NAMESPACE, {
+          mode: "dual",
+        });
+        return { a, b };
+      });
+
+      await vi.waitFor(() => expect(result.current.a.status).toBe("ready"));
+      await vi.waitFor(() => expect(result.current.b.status).toBe("ready"));
+
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(instances).toHaveLength(1);
+      expect(renders).toBeLessThan(20);
+    });
+
+    test("rapid sequential options changes never leave more than the committed key retained", async () => {
+      const { Fake } = makeAIFake({
+        status: "available",
+        buildInstance: () => buildInstance(),
+      });
+      vi.stubGlobal(NAMESPACE, Fake);
+
+      const { rerender } = await renderHook(
+        (props: { mode: string } = { mode: "v0" }) =>
+          useLifecycle<TestOptions, TestInstance>(NAMESPACE, props),
+        { initialProps: { mode: "v0" } },
+      );
+
+      for (let i = 1; i <= 5; i++) {
+        await rerender({ mode: `v${i}` });
+        expect(__sizeForTests()).toBe(1);
+      }
+    });
+
+    test("prepare()'s error retry restarts the store for every component sharing it", async () => {
+      let shouldFail = true;
+      const create = vi.fn(() =>
+        shouldFail
+          ? Promise.reject(new Error("boom"))
+          : Promise.resolve(buildInstance({ marker: "shared-retry" })),
+      );
+      vi.stubGlobal(NAMESPACE, {
+        availability: vi.fn(() => Promise.resolve("available")),
+        create,
+      });
+
+      const hookA = await renderHook(() =>
+        useLifecycle<TestOptions, TestInstance>(NAMESPACE, { mode: "retry" }),
+      );
+      const hookB = await renderHook(() =>
+        useLifecycle<TestOptions, TestInstance>(NAMESPACE, { mode: "retry" }),
+      );
+      await vi.waitFor(() => expect(hookA.result.current.status).toBe("error"));
+      await vi.waitFor(() => expect(hookB.result.current.status).toBe("error"));
+
+      shouldFail = false;
+      setUserActivation(true);
+      await hookA.result.current.prepare();
+
+      expect(hookA.result.current.status).toBe("ready");
+      expect(hookB.result.current.status).toBe("ready");
+      expect(create).toHaveBeenCalledTimes(2);
+    });
   });
 });
