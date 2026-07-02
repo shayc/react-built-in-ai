@@ -23,6 +23,7 @@ import {
   __resetForTests,
   __sizeForTests,
   snapshotDownloadProgress,
+  subscribeDownloads,
 } from "./registry";
 import { createStore } from "./store";
 import { useLifecycle } from "./use-lifecycle";
@@ -250,6 +251,38 @@ describe("useLifecycle", () => {
     await vi.waitFor(() => expect(result.current.status).toBe("ready"));
     expect(result.current.progress).toBeNull();
     expect(snapshotDownloadProgress([NAMESPACE])).toBeNull();
+  });
+
+  test("unmounting the last holder mid-download notifies global-progress subscribers", async () => {
+    // Regression: release() used to unsubscribe the store from the download
+    // aggregate *before* the deletion could be announced, so a subscriber
+    // (useGlobalDownloadProgress) never learned the entry vanished and would
+    // stay frozen at the last-seen progress instead of returning to null.
+    const create = vi.fn(
+      () => new Promise<TestInstance>(() => undefined), // never resolves
+    );
+    vi.stubGlobal(NAMESPACE, {
+      availability: vi.fn(() => Promise.resolve("downloadable")),
+      create,
+    });
+
+    const hook = await renderHook(() =>
+      useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
+    );
+    await vi.waitFor(() => expect(hook.result.current.status).toBe("downloadable"));
+
+    setUserActivation(true);
+    hook.result.current.prepare().catch(() => undefined);
+    await vi.waitFor(() => expect(hook.result.current.status).toBe("downloading"));
+    expect(snapshotDownloadProgress([NAMESPACE])).toBe(0);
+
+    const listener = vi.fn();
+    const unsubscribe = subscribeDownloads(listener);
+    await hook.unmount();
+
+    expect(listener).toHaveBeenCalled();
+    expect(snapshotDownloadProgress([NAMESPACE])).toBeNull();
+    unsubscribe();
   });
 
   test("emits progress via downloadprogress events while creating", async () => {

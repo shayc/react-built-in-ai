@@ -31,13 +31,15 @@ export function buildKey(
     return globalName;
   }
   const keys = Object.keys(options).sort();
-  if (keys.length === 0) {
-    return globalName;
-  }
   const ordered = Object.fromEntries(
     keys.map((k) => [k, (options as Record<string, unknown>)[k]]),
   );
-  return `${globalName}:${JSON.stringify(ordered)}`;
+  const json = JSON.stringify(ordered);
+  // JSON.stringify drops undefined-valued props, so an options object made
+  // entirely of them (e.g. `{ foo: undefined }`) serializes to "{}" — the
+  // same as an empty object. Collapse both to the bare name so they share
+  // a store, per D1 in PLAN-store-registry.md.
+  return json === "{}" ? globalName : `${globalName}:${json}`;
 }
 
 /** The live store for `key`, if one is currently retained. @internal */
@@ -81,6 +83,11 @@ export function release(key: string): void {
     existing.unsubscribe();
     existing.store.stop();
     entries.delete(key);
+    // The unsubscribe above means the store's own stop() transition can't
+    // reach download listeners — if this entry was mid-download, its
+    // disappearance must be announced explicitly or the aggregate freezes
+    // at its last value instead of returning to null.
+    notifyDownloads();
   }
 }
 
@@ -156,9 +163,9 @@ function matchesPrefix(key: string, prefixes: readonly string[]): boolean {
 /**
  * Lowest progress among matching in-flight downloads — the one with the
  * longest to go — across both retained stores and external creator calls,
- * or `null` when none are in flight. See `progress-store`'s former
- * min-vs-max rationale, preserved here: min only ever rises as downloads
- * complete, so the aggregate never snaps backwards.
+ * or `null` when none are in flight. Min-aggregation means the reported
+ * value only ever rises as downloads complete, so the aggregate never snaps
+ * backwards.
  *
  * @internal
  */
