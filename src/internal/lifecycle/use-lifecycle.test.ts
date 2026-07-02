@@ -269,11 +269,15 @@ describe("useLifecycle", () => {
     const hook = await renderHook(() =>
       useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
     );
-    await vi.waitFor(() => expect(hook.result.current.status).toBe("downloadable"));
+    await vi.waitFor(() =>
+      expect(hook.result.current.status).toBe("downloadable"),
+    );
 
     setUserActivation(true);
     hook.result.current.prepare().catch(() => undefined);
-    await vi.waitFor(() => expect(hook.result.current.status).toBe("downloading"));
+    await vi.waitFor(() =>
+      expect(hook.result.current.status).toBe("downloading"),
+    );
     expect(snapshotDownloadProgress([NAMESPACE])).toBe(0);
 
     const listener = vi.fn();
