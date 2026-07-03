@@ -1,10 +1,10 @@
 # `@shayc/react-built-in-ai`
 
-A thin React layer over the browser's [Built-in AI](https://developer.chrome.com/docs/ai/built-in) APIs — Gemini Nano on Chrome, Phi-4-mini on Edge. Six task APIs, each with a React hook and an imperative creator, all sharing one lifecycle state machine.
-
 [![npm version](https://img.shields.io/npm/v/@shayc/react-built-in-ai.svg)](https://www.npmjs.com/package/@shayc/react-built-in-ai)
 [![CI](https://github.com/shayc/react-built-in-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/shayc/react-built-in-ai/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/npm/l/@shayc/react-built-in-ai.svg)](LICENSE)
+
+A thin React layer over the browser's [Built-in AI](https://developer.chrome.com/docs/ai/built-in) APIs — Gemini Nano on Chrome, Phi-4-mini on Edge. Six task APIs, each with a React hook and an imperative creator, all sharing one lifecycle state machine. TypeScript-first, with option and return types exported for every API.
 
 **Browser support** — Chromium only (Chrome 138+, Edge); not Firefox or Safari. The Built-in AI globals are gated by Chrome flags / origin trial and absent on unsupported builds — feature-detect with [`isSupported()`](#capability-check) and render a fallback.
 
@@ -38,12 +38,6 @@ function Translate() {
 
 On a fresh browser, the first click triggers the model download (gated by user activation); subsequent clicks call `translate` directly. See [Lifecycle](#lifecycle) for the full state machine.
 
-## Features
-
-- **First-class TypeScript** — full `.d.mts` types and a `BuiltInAIError` hierarchy (`UnsupportedError`, `UnavailableError`, `MissingUserActivationError`, `NotReadyError`) for narrow `catch` clauses.
-- **`AsyncDisposable` instances** — use `await using` for automatic teardown; `.destroy()` stays exposed for callers that need to release earlier.
-- **Cross-instance download progress** — `useGlobalDownloadProgress()` aggregates in-flight downloads across every hook and creator for a single global progress UI that never snaps backwards as individual downloads finish.
-
 ## Surface
 
 | Browser API                                                                  | React hook            | Imperative creator       |
@@ -57,7 +51,10 @@ On a fresh browser, the first click triggers the model download (gated by user a
 
 **Use the hook** when options are known at render time (e.g. a translator bound to the user's current language pair). **Use the creator** when options are decided mid-flow and a hook can't be driven (queued work, command palettes, one-shot scripts).
 
-Every hook shares the lifecycle surface plus task-specific methods (`translate`, `rewrite`, `proofread`, `summarize`, `write`, `detect`), along with streaming and `measureInput` variants where the underlying API supports them. Two exceptions: `useProofreader` exposes only `proofread` — no streaming, `measureInput`, or `inputQuota` (the browser API offers none); and `useLanguageDetector` has no streaming variant — its `detect` resolves with an array of ranked `{ detectedLanguage, confidence }` candidates rather than a string.
+Every hook shares the lifecycle surface plus task-specific methods (`translate`, `rewrite`, `proofread`, `summarize`, `write`, `detect`), along with streaming and `measureInput` variants where the underlying API supports them. Two exceptions:
+
+- `useProofreader` exposes only `proofread` — the browser API offers no streaming, `measureInput`, or `inputQuota`.
+- `useLanguageDetector` has no streaming variant, and its `detect` resolves with an array of ranked `{ detectedLanguage, confidence }` candidates rather than a string.
 
 ## Requirements
 
@@ -67,11 +64,10 @@ Every hook shares the lifecycle surface plus task-specific methods (`translate`,
 | Browser       | Chromium with Built-in AI globals — Chrome 138+, Edge                    |
 | Runtime       | Client-only — add `"use client"` in RSC setups (e.g. Next.js app router) |
 | Module format | ESM only                                                                 |
-| Node          | 22+ for development (runtime is the browser)                             |
 
 ## Capability check
 
-The Built-in AI globals are gated by Chrome flags / origin trial and only present on supported builds. Feature-detect before mounting any hook:
+Feature-detect before mounting any hook:
 
 ```tsx
 import { isSupported } from "@shayc/react-built-in-ai";
@@ -201,11 +197,9 @@ function GlobalDownloadBar() {
 
 ## Option changes
 
-| Behavior  | Detail                                                                                                                                                                                                                                                                    |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Equality  | Structural: options are sorted and compared by content, not by reference. Inline object/array literals are safe without memoization — a fresh literal with the same content resolves to the same underlying instance                                                      |
-| Sharing   | Components with equal options share one underlying model instance and one lifecycle — an option change only affects components still on the old options                                                                                                                   |
-| On change | Re-enters the state machine for this component. If this was the last component holding the old options, that instance is destroyed and its in-flight work aborted with `AbortError`; if another component still holds the old options, that instance keeps running for it |
+Options are compared structurally — sorted and compared by content, not by reference — so inline object/array literals are safe without memoization: a fresh literal with the same content resolves to the same underlying instance.
+
+When a component's options change, it re-enters the state machine. If it was the last component holding the old options, that instance is destroyed and its in-flight work aborted with `AbortError`; if another component still holds the old options, that instance keeps running for it — an option change never disturbs components still sharing the old instance.
 
 ## Errors
 
@@ -218,7 +212,7 @@ Lifecycle gating throws `BuiltInAIError` subclasses. Action methods (`translate`
 | `MissingUserActivationError` | A download needed to be started without a user gesture. Trigger `prepare()` (or the first action) from a click/keypress handler. |
 | `NotReadyError`              | A prior `create()` failed. Call `prepare()` from a user activation to retry; inspect `error.cause` for the underlying reason.    |
 
-Components with equal options share one lifecycle: if another component sharing your options calls `prepare()` to retry from `"error"`, that restarts the shared store — any of your own in-flight `acquire()`-backed calls reject with a `DOMException` named `AbortError`. Filter it like any other cancellation (`error.name === "AbortError"`), not as a failure.
+Components with equal options share one lifecycle: if another component sharing your options calls `prepare()` to retry from `"error"`, that restarts the shared store — any of your own in-flight action calls reject with a `DOMException` named `AbortError`. Filter it like any other cancellation (`error.name === "AbortError"`), not as a failure.
 
 ## Cancellation
 
