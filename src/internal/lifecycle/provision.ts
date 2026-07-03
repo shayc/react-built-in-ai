@@ -34,7 +34,8 @@ export interface ProvisionInstanceOptions<
  * Single user-activation gate for the whole library: `create()` needs a
  * transient activation whenever a download must be initiated. Joining an
  * already-in-flight download (`availability === "downloading"`) is
- * gesture-free — see PLAN-passive-downloading.md §2. Wires the download
+ * gesture-free — activation authorizes starting a fetch, and an in-flight
+ * one was already authorized by whoever started it. Wires the download
  * monitor whenever a download is involved (initiated or joined), and wraps
  * the result as `AsyncDisposable`.
  *

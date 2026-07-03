@@ -1113,7 +1113,7 @@ describe("useLifecycle", () => {
       expect(availability.mock.calls.length).toBe(callsAtPark + 1);
     });
 
-    test("a joined download refused with NotAllowedError twice throws MissingUserActivationError after exactly one re-probe (D8)", async () => {
+    test("a joined download refused with NotAllowedError twice throws MissingUserActivationError after exactly one re-probe", async () => {
       // Every probe answers "downloading" and every join is refused — the
       // task-await in the "downloading" case re-parks to "downloadable" each
       // time, so this exercises the same reprobed-bound as the plain

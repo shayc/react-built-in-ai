@@ -38,7 +38,7 @@ export function buildKey(
   // JSON.stringify drops undefined-valued props, so an options object made
   // entirely of them (e.g. `{ foo: undefined }`) serializes to "{}" — the
   // same as an empty object. Collapse both to the bare name so they share
-  // a store, per D1 in PLAN-store-registry.md.
+  // a store.
   return json === "{}" ? globalName : `${globalName}:${json}`;
 }
 
@@ -104,9 +104,9 @@ export function release(key: string): void {
 //    by clearing a key they still share.
 //
 // Both sources seed `progress: null` until the browser reports a real
-// fraction (see PLAN-passive-downloading.md §D2) — the aggregate coalesces
-// `null` to `0` per-entry before taking the min, so an unsignaled download
-// still shows up as "in flight" instead of vanishing from the aggregate.
+// fraction — the aggregate coalesces `null` to `0` per-entry before taking
+// the min, so an unsignaled download still shows up as "in flight" instead
+// of vanishing from the aggregate.
 
 const downloadListeners = new Set<() => void>();
 
@@ -137,7 +137,7 @@ export function beginExternalDownload(key: string): number {
   const token = nextExternalToken;
   nextExternalToken += 1;
   // null, not 0: a number means the browser actually reported this fraction
-  // via downloadprogress — see PLAN-passive-downloading.md §D2.
+  // via downloadprogress.
   externalDownloads.set(token, { key, progress: null });
   notifyDownloads();
   return token;

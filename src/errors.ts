@@ -29,7 +29,7 @@ export class UnavailableError extends BuiltInAIError {
   }
 }
 
-/** A download was required but no transient user activation was present. */
+/** A download needed to be started but no transient user activation was present. */
 export class MissingUserActivationError extends BuiltInAIError {
   override name = "MissingUserActivationError";
   constructor(

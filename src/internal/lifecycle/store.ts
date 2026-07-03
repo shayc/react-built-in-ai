@@ -133,8 +133,9 @@ export function createStore<
 
   // Probes availability and settles the store: "unavailable" is terminal,
   // "available" provisions immediately, "downloading" joins an in-flight
-  // external download (gesture-free — see PLAN-passive-downloading.md §2),
-  // and "downloadable" parks until prepare() or an action provides a gesture.
+  // external download (gesture-free — browsers require activation to start
+  // a download, not to observe one already authorized elsewhere), and
+  // "downloadable" parks until prepare() or an action provides a gesture.
   // Used both for the initial probe (from start()) and to revalidate a parked
   // store without a gesture (from ensureReady()'s "downloadable" case) — both
   // are "is a download still actually required?" questions with the same answer.
@@ -155,7 +156,7 @@ export function createStore<
       if (availability === "downloading") {
         // Join gesture-free: the probe's job is to decide, not to download —
         // don't await, or this promise stays pending for the whole download
-        // and pins the store in "checking" the entire time (see D6).
+        // and pins the store in "checking" the entire time.
         void provision(signal, { showDownloadUI: true }, availability);
         return;
       }
@@ -222,8 +223,8 @@ export function createStore<
       } else if (error instanceof UnavailableError) {
         transition({ kind: "unavailable" });
       } else if (error instanceof MissingUserActivationError) {
-        // kickoff() no longer gates on activation itself (see below) — this is
-        // the actual gate, reached only when a caller drove provisioning
+        // kickoff() doesn't gate on activation itself — provisionInstance()
+        // is the actual gate, reached only when a caller drove provisioning
         // without one. Re-park rather than surface as a hard error.
         transition({ kind: "downloadable" });
       } else if (
@@ -231,9 +232,12 @@ export function createStore<
         error.name === "NotAllowedError"
       ) {
         // A joining create() can be refused by a browser that requires
-        // activation even to join (see PLAN-passive-downloading.md §D4) —
-        // "needs a gesture", not "broken". Re-park like the activation gate
-        // above rather than landing in the terminal "error" state.
+        // activation even to join an in-flight download — "needs a gesture",
+        // not "broken". Re-park like the activation gate above rather than
+        // landing in the terminal "error" state. NotAllowedError is also
+        // what a permission-policy denial throws, but that can't reach here:
+        // a policy-denied context answers "unavailable" at the probe, so the
+        // store terminates before create() is ever attempted.
         transition({ kind: "downloadable" });
       } else {
         transition({ kind: "error", error: wrap(error) });
@@ -279,10 +283,11 @@ export function createStore<
             kickoff();
             continue;
           }
-          // No gesture: the model may have finished downloading elsewhere
-          // (another component's hook, another tab) since this store last
-          // checked. Re-probe once — if it's genuinely still downloadable,
-          // stay parked and require a gesture as before.
+          // No gesture: the model may have finished downloading — or still
+          // be mid-download — elsewhere (another component's hook, another
+          // tab) since this store last checked. Re-probe once: a finished
+          // download provisions, an in-flight one is joined; only if it's
+          // genuinely still downloadable stay parked and require a gesture.
           if (reprobed) {
             throw new MissingUserActivationError();
           }
