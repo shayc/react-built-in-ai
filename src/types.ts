@@ -1,16 +1,17 @@
 import type { BuiltInAIError } from "./errors";
 
 /**
- * Lifecycle state of a built-in AI hook. Starts at `idle` (probing
- * availability) and advances to `ready` — pausing at `downloadable` until a
- * user gesture authorizes the fetch, then through `downloading` — or settles
- * in a terminal `unsupported` / `unavailable` / `error`. `downloadable`
- * mirrors the browser's `availability()` vocabulary.
+ * Lifecycle state of a built-in AI hook. Starts at `checking` (probing
+ * availability, or quietly creating an already-downloaded model) and
+ * advances to `ready` — pausing at `downloadable` until a user gesture
+ * authorizes the fetch, then through `downloading` — or settles in a
+ * terminal `unsupported` / `unavailable` / `error`. `downloadable` mirrors
+ * the browser's `availability()` vocabulary.
  */
 export type Status =
   | "unsupported"
   | "unavailable"
-  | "idle"
+  | "checking"
   | "downloadable"
   | "downloading"
   | "ready"
@@ -20,8 +21,8 @@ export type Status =
 export interface BaseHookReturn {
   /** Current lifecycle state. See {@link Status} for transitions. */
   status: Status;
-  /** `0..1` while `status === "downloading"`; `0` otherwise. */
-  progress: number;
+  /** `0..1` while `status === "downloading"`; `null` otherwise — `null` (not `0`) distinguishes "nothing downloading" from "just started at 0%". */
+  progress: number | null;
   /** Last lifecycle error; inspect `.cause` for the underlying browser rejection. */
   error: BuiltInAIError | null;
   /**
@@ -31,8 +32,23 @@ export interface BaseHookReturn {
    * gesture. From `error` state it tears down the failed instance and
    * re-initializes, so it doubles as the recovery/retry path.
    *
+   * Hooks with equal options share one underlying instance (see the
+   * "Instance sharing" section of the README) — `prepare()` restarts that
+   * shared instance, so a retry from one component is visible to every
+   * component sharing it, not just the caller. That restart also aborts any
+   * other sharing component's in-flight action call or `prepare()`/gate
+   * resolution — those reject with a `DOMException` named `AbortError`,
+   * which should be filtered like any other cancellation
+   * (`error.name === "AbortError"`), not treated as a failure.
+   *
+   * Since `status` already reflects everything user-facing, a fire-and-forget
+   * `prepare().catch(() => {})` from a gesture handler is a reasonable way to
+   * pre-warm without surfacing a redundant rejection.
+   *
    * @throws A {@link BuiltInAIError} subclass — `UnsupportedError`,
-   * `UnavailableError`, `MissingUserActivationError`, or `NotReadyError`.
+   * `UnavailableError`, `MissingUserActivationError`, or `NotReadyError`. Can
+   * also reject with a `DOMException` named `AbortError` when a sibling
+   * component sharing this store restarts it mid-flight (see above).
    */
   prepare: () => Promise<void>;
 }

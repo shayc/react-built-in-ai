@@ -1,4 +1,4 @@
-import { createInstance } from "../internal/lifecycle/create-instance";
+import { provisionStandalone } from "../internal/lifecycle/provision";
 import type { SummarizerOptions } from "./use-summarizer";
 
 /**
@@ -32,9 +32,9 @@ export async function createSummarizer(
   options: CreateSummarizerOptions = {},
 ): Promise<Summarizer & AsyncDisposable> {
   const { signal, ...createOptions } = options;
-  return createInstance<typeof createOptions, Summarizer>({
-    name: "Summarizer",
-    options: createOptions,
+  return provisionStandalone<typeof createOptions, Summarizer>(
+    "Summarizer",
+    createOptions,
     signal,
-  });
+  );
 }

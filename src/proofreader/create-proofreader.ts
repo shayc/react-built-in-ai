@@ -1,4 +1,4 @@
-import { createInstance } from "../internal/lifecycle/create-instance";
+import { provisionStandalone } from "../internal/lifecycle/provision";
 import type { ProofreaderOptions } from "./use-proofreader";
 
 /**
@@ -36,9 +36,9 @@ export async function createProofreader(
   options: CreateProofreaderOptions = {},
 ): Promise<Proofreader & AsyncDisposable> {
   const { signal, ...createOptions } = options;
-  return createInstance<typeof createOptions, Proofreader>({
-    name: "Proofreader",
-    options: createOptions,
+  return provisionStandalone<typeof createOptions, Proofreader>(
+    "Proofreader",
+    createOptions,
     signal,
-  });
+  );
 }

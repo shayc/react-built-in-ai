@@ -1,4 +1,4 @@
-import { createInstance } from "../internal/lifecycle/create-instance";
+import { provisionStandalone } from "../internal/lifecycle/provision";
 import type { TranslatorOptions } from "./use-translator";
 
 /**
@@ -37,9 +37,9 @@ export async function createTranslator(
   options: CreateTranslatorOptions,
 ): Promise<Translator & AsyncDisposable> {
   const { signal, ...createOptions } = options;
-  return createInstance<typeof createOptions, Translator>({
-    name: "Translator",
-    options: createOptions,
+  return provisionStandalone<typeof createOptions, Translator>(
+    "Translator",
+    createOptions,
     signal,
-  });
+  );
 }
