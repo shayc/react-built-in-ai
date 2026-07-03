@@ -7,6 +7,11 @@ import type { BuiltInAIError } from "./errors";
  * authorizes the fetch, then through `downloading` — or settles in a
  * terminal `unsupported` / `unavailable` / `error`. `downloadable` mirrors
  * the browser's `availability()` vocabulary.
+ *
+ * `downloading` is also entered passively, without this hook driving the
+ * fetch itself, when the probe finds a download already in flight (started
+ * by another hook, another tab, or an imperative `create*` call) — the store
+ * joins it gesture-free and reports its progress like any other download.
  */
 export type Status =
   | "unsupported"
@@ -21,7 +26,14 @@ export type Status =
 export interface BaseHookReturn {
   /** Current lifecycle state. See {@link Status} for transitions. */
   status: Status;
-  /** `0..1` while `status === "downloading"`; `null` otherwise — `null` (not `0`) distinguishes "nothing downloading" from "just started at 0%". */
+  /**
+   * `0..1` while `status === "downloading"` once the browser has reported a
+   * fraction via `downloadprogress`; `null` otherwise, including while
+   * `status === "downloading"` but no such event has arrived yet (e.g. a
+   * download just joined, or a browser that doesn't emit progress events to
+   * joining monitors). A `number` here always reflects a real browser
+   * report — the hook never fabricates a starting value.
+   */
   progress: number | null;
   /** Last lifecycle error; inspect `.cause` for the underlying browser rejection. */
   error: BuiltInAIError | null;

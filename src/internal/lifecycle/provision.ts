@@ -32,8 +32,11 @@ export interface ProvisionInstanceOptions<
 
 /**
  * Single user-activation gate for the whole library: `create()` needs a
- * transient activation whenever a download is required. Wires the download
- * monitor when one is, and wraps the result as `AsyncDisposable`.
+ * transient activation whenever a download must be initiated. Joining an
+ * already-in-flight download (`availability === "downloading"`) is
+ * gesture-free — see PLAN-passive-downloading.md §2. Wires the download
+ * monitor whenever a download is involved (initiated or joined), and wraps
+ * the result as `AsyncDisposable`.
  *
  * Assumes `availability !== "unavailable"` — callers reject on that value
  * before reaching here, since it's not a `create()`-time concern.
@@ -46,10 +49,12 @@ export async function provisionInstance<
 >(params: ProvisionInstanceOptions<O, I>): Promise<I & AsyncDisposable> {
   const { namespace, options, availability, signal, onProgress } = params;
 
-  const willDownload = availability !== "available";
-  if (willDownload && !hasUserActivation()) {
+  const requiresActivation = availability === "downloadable";
+  if (requiresActivation && !hasUserActivation()) {
     throw new MissingUserActivationError();
   }
+
+  const willDownload = availability !== "available";
 
   const instance = await namespace.create({
     ...options!,

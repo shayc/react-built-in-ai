@@ -31,7 +31,7 @@ interface ProvisionOptions {
 type InternalState<Model> =
   | { kind: "checking"; probe: Promise<void> }
   | { kind: "downloadable" }
-  | { kind: "downloading"; progress: number; task: Promise<void> }
+  | { kind: "downloading"; progress: number | null; task: Promise<void> }
   | { kind: "ready"; instance: Model; inputQuota: number }
   | { kind: "unsupported" }
   | { kind: "unavailable" }
@@ -132,7 +132,9 @@ export function createStore<
   }
 
   // Probes availability and settles the store: "unavailable" is terminal,
-  // "available" provisions immediately, anything else parks at "downloadable".
+  // "available" provisions immediately, "downloading" joins an in-flight
+  // external download (gesture-free — see PLAN-passive-downloading.md §2),
+  // and "downloadable" parks until prepare() or an action provides a gesture.
   // Used both for the initial probe (from start()) and to revalidate a parked
   // store without a gesture (from ensureReady()'s "downloadable" case) — both
   // are "is a download still actually required?" questions with the same answer.
@@ -150,8 +152,15 @@ export function createStore<
         await provision(signal, { showDownloadUI: false }, availability);
         return;
       }
-      // "downloadable" or "downloading": a fetch is needed, and starting one
-      // requires a user gesture — park until prepare() or an action provides it.
+      if (availability === "downloading") {
+        // Join gesture-free: the probe's job is to decide, not to download —
+        // don't await, or this promise stays pending for the whole download
+        // and pins the store in "checking" the entire time (see D6).
+        void provision(signal, { showDownloadUI: true }, availability);
+        return;
+      }
+      // "downloadable": a fetch is needed, and starting one requires a user
+      // gesture — park until prepare() or an action provides it.
       transition({ kind: "downloadable" });
     } catch (error) {
       if (signal.aborted) {
@@ -168,7 +177,10 @@ export function createStore<
   ): Promise<void> {
     const task = runProvision(signal, availability);
     if (showDownloadUI) {
-      transition({ kind: "downloading", progress: 0, task });
+      // null, not 0: a number means the browser actually reported this
+      // fraction via downloadprogress. A joined download may already be
+      // partway done; claiming 0 here would be a fabrication either way.
+      transition({ kind: "downloading", progress: null, task });
     }
     return task;
   }
@@ -213,6 +225,15 @@ export function createStore<
         // kickoff() no longer gates on activation itself (see below) — this is
         // the actual gate, reached only when a caller drove provisioning
         // without one. Re-park rather than surface as a hard error.
+        transition({ kind: "downloadable" });
+      } else if (
+        error instanceof DOMException &&
+        error.name === "NotAllowedError"
+      ) {
+        // A joining create() can be refused by a browser that requires
+        // activation even to join (see PLAN-passive-downloading.md §D4) —
+        // "needs a gesture", not "broken". Re-park like the activation gate
+        // above rather than landing in the terminal "error" state.
         transition({ kind: "downloadable" });
       } else {
         transition({ kind: "error", error: wrap(error) });

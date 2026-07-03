@@ -50,6 +50,32 @@ describe("provisionInstance", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
+  test("does not require activation when joining an in-flight download ('downloading')", async () => {
+    setUserActivation(false);
+    const onProgress = vi.fn();
+    const create = vi.fn((opts?: { monitor?: (m: CreateMonitor) => void }) => {
+      const monitor = new EventTarget() as CreateMonitor;
+      opts?.monitor?.(monitor);
+      return Promise.resolve({ destroy: vi.fn() });
+    });
+    const namespace: AINamespace<TestOptions, TestInstance> = {
+      availability: vi.fn(),
+      create,
+    };
+
+    const created = await provisionInstance({
+      namespace,
+      options: { mode: "a" },
+      availability: "downloading",
+      onProgress,
+    });
+
+    expect(created).toBeTruthy();
+    expect(create).toHaveBeenCalledTimes(1);
+    const [createArg] = create.mock.calls[0] as [{ monitor?: unknown }];
+    expect(createArg.monitor).toBeTypeOf("function");
+  });
+
   test("does not require activation when availability is 'available'", async () => {
     setUserActivation(false);
     const instance: TestInstance = { destroy: vi.fn(), marker: "live" };
@@ -207,6 +233,34 @@ describe("provisionStandalone", () => {
       provisionStandalone<TestOptions, TestInstance>(NAMESPACE, { mode: "a" }),
     ).rejects.toBeInstanceOf(MissingUserActivationError);
     expect(create).not.toHaveBeenCalled();
+  });
+
+  test("joins an in-flight download without a gesture and tracks it as an external download", async () => {
+    setUserActivation(false);
+    let resolveCreate!: (value: TestInstance) => void;
+    vi.stubGlobal(NAMESPACE, {
+      availability: vi.fn(() => Promise.resolve("downloading")),
+      create: vi.fn(
+        () =>
+          new Promise<TestInstance>((resolve) => {
+            resolveCreate = resolve;
+          }),
+      ),
+    });
+
+    const pending = provisionStandalone<TestOptions, TestInstance>(NAMESPACE, {
+      mode: "a",
+    });
+
+    await vi.waitFor(() =>
+      expect(snapshotDownloadProgress([NAMESPACE])).toBe(0),
+    );
+
+    resolveCreate({ destroy: vi.fn() });
+    const created = await pending;
+
+    expect(created).toBeTruthy();
+    expect(snapshotDownloadProgress([NAMESPACE])).toBeNull();
   });
 
   test("creates an instance when available without requiring activation", async () => {

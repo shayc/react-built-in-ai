@@ -163,19 +163,112 @@ describe("useLifecycle", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  test("settles in 'downloadable' when the browser is already downloading elsewhere", async () => {
-    const { Fake, create } = makeAIFake({
-      status: "downloading",
-      buildInstance,
+  test("joins and reports 'downloading' when the browser is already downloading elsewhere, then settles ready", async () => {
+    let resolveCreate!: (value: TestInstance) => void;
+    const create = vi.fn<
+      (opts?: { monitor?: unknown }) => Promise<TestInstance>
+    >(
+      () =>
+        new Promise<TestInstance>((resolve) => {
+          resolveCreate = resolve;
+        }),
+    );
+    vi.stubGlobal(NAMESPACE, {
+      availability: vi.fn(() => Promise.resolve("downloading")),
+      create,
     });
-    vi.stubGlobal(NAMESPACE, Fake);
+
+    const { result } = await renderHook(() =>
+      useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
+    );
+
+    // Joining is gesture-free — no setUserActivation(true) needed.
+    await vi.waitFor(() => expect(result.current.status).toBe("downloading"));
+    expect(result.current.progress).toBeNull();
+    expect(create).toHaveBeenCalledTimes(1);
+    const [createArg] = create.mock.calls[0] as [{ monitor?: unknown }];
+    expect(createArg.monitor).toBeTypeOf("function");
+
+    resolveCreate(buildInstance());
+    await vi.waitFor(() => expect(result.current.status).toBe("ready"));
+  });
+
+  test("a joined download's monitor progress upgrades null to the reported fraction", async () => {
+    const monitors: CreateMonitor[] = [];
+    let resolveCreate!: (value: TestInstance) => void;
+    const create = vi.fn((opts: { monitor?: (m: CreateMonitor) => void }) => {
+      const monitor = new EventTarget() as CreateMonitor;
+      monitors.push(monitor);
+      opts.monitor?.(monitor);
+      return new Promise<TestInstance>((resolve) => {
+        resolveCreate = resolve;
+      });
+    });
+    vi.stubGlobal(NAMESPACE, {
+      availability: vi.fn(() => Promise.resolve("downloading")),
+      create,
+    });
+
+    const { result } = await renderHook(() =>
+      useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
+    );
+    await vi.waitFor(() => expect(result.current.status).toBe("downloading"));
+    expect(result.current.progress).toBeNull();
+
+    monitors[0].dispatchEvent(
+      Object.assign(new Event("downloadprogress"), { loaded: 0.6 }),
+    );
+    await vi.waitFor(() => expect(result.current.progress).toBe(0.6));
+
+    resolveCreate(buildInstance());
+    await vi.waitFor(() => expect(result.current.status).toBe("ready"));
+  });
+
+  test("a joined download whose create() resolves hands acquire() that exact instance", async () => {
+    const inst = buildInstance({ marker: "joined" });
+    vi.stubGlobal(NAMESPACE, {
+      availability: vi.fn(() => Promise.resolve("downloading")),
+      create: vi.fn(() => Promise.resolve(inst)),
+    });
+
+    const { result } = await renderHook(() =>
+      useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
+    );
+    await vi.waitFor(() => expect(result.current.status).toBe("ready"));
+
+    const acquired = await result.current.acquire();
+    expect(acquired.instance).toBe(inst);
+  });
+
+  test("a joined download refused with NotAllowedError re-parks at 'downloadable' instead of erroring", async () => {
+    vi.stubGlobal(NAMESPACE, {
+      availability: vi.fn(() => Promise.resolve("downloading")),
+      create: vi.fn(() =>
+        Promise.reject(new DOMException("needs a gesture", "NotAllowedError")),
+      ),
+    });
 
     const { result } = await renderHook(() =>
       useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
     );
 
     await vi.waitFor(() => expect(result.current.status).toBe("downloadable"));
-    expect(create).not.toHaveBeenCalled();
+    expect(result.current.error).toBeNull();
+  });
+
+  test("a joined download refused with a generic error surfaces as status='error'", async () => {
+    const original = new Error("joined create failed");
+    vi.stubGlobal(NAMESPACE, {
+      availability: vi.fn(() => Promise.resolve("downloading")),
+      create: vi.fn(() => Promise.reject(original)),
+    });
+
+    const { result } = await renderHook(() =>
+      useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
+    );
+
+    await vi.waitFor(() => expect(result.current.status).toBe("error"));
+    expect(result.current.error?.cause).toBe(original);
   });
 
   test("prepare() rejects with MissingUserActivationError when downloadable without activation", async () => {
@@ -242,9 +335,9 @@ describe("useLifecycle", () => {
     result.current.prepare().catch(() => undefined);
     await vi.waitFor(() => expect(result.current.status).toBe("downloading"));
 
-    // The registry derives this straight from the store's own snapshot —
-    // no separate write path to keep in sync.
-    expect(result.current.progress).toBe(0);
+    // No downloadprogress event has fired yet, so the raw snapshot is null —
+    // the registry derives the aggregate straight from it and coalesces to 0.
+    expect(result.current.progress).toBeNull();
     expect(snapshotDownloadProgress([NAMESPACE])).toBe(0);
 
     resolveCreate(buildInstance());
@@ -314,7 +407,7 @@ describe("useLifecycle", () => {
     void result.current.prepare();
 
     await vi.waitFor(() => expect(result.current.status).toBe("downloading"));
-    expect(result.current.progress).toBe(0);
+    expect(result.current.progress).toBeNull();
 
     monitors[0].dispatchEvent(
       Object.assign(new Event("downloadprogress"), { loaded: 0.4 }),
@@ -460,6 +553,34 @@ describe("useLifecycle", () => {
     expect(result.current.status).toBe("ready");
   });
 
+  test("acquire() parked during a passively-joined download resolves to ready when create completes", async () => {
+    let resolveCreate!: (value: TestInstance) => void;
+    const inst = buildInstance({ marker: "joined-park" });
+    const create = vi.fn(
+      () =>
+        new Promise<TestInstance>((resolve) => {
+          resolveCreate = resolve;
+        }),
+    );
+    vi.stubGlobal(NAMESPACE, {
+      availability: vi.fn(() => Promise.resolve("downloading")),
+      create,
+    });
+
+    const { result } = await renderHook(() =>
+      useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
+    );
+    // No setUserActivation(true) — the join itself never required a gesture.
+    await vi.waitFor(() => expect(result.current.status).toBe("downloading"));
+
+    const pending = result.current.acquire();
+    resolveCreate(inst);
+
+    const acquired = await pending;
+    expect(acquired.instance).toBe(inst);
+    expect(result.current.status).toBe("ready");
+  });
+
   test("acquire() rejects with the caller's abort reason mid-download", async () => {
     const create = vi.fn(() => new Promise<TestInstance>(() => undefined));
     vi.stubGlobal(NAMESPACE, {
@@ -571,6 +692,31 @@ describe("useLifecycle", () => {
       useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
     );
     await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+
+    await unmount();
+    resolveCreate(inst);
+
+    await vi.waitFor(() => expect(inst.destroy).toHaveBeenCalledTimes(1));
+  });
+
+  test("unmounting mid-join aborts the epoch; a create resolving after abort is destroyed with no transition", async () => {
+    const inst = buildInstance({ marker: "joined-late" });
+    let resolveCreate!: (value: TestInstance) => void;
+    const create = vi.fn(
+      () =>
+        new Promise<TestInstance>((resolve) => {
+          resolveCreate = resolve;
+        }),
+    );
+    vi.stubGlobal(NAMESPACE, {
+      availability: vi.fn(() => Promise.resolve("downloading")),
+      create,
+    });
+
+    const { result, unmount } = await renderHook(() =>
+      useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
+    );
+    await vi.waitFor(() => expect(result.current.status).toBe("downloading"));
 
     await unmount();
     resolveCreate(inst);
@@ -965,6 +1111,39 @@ describe("useLifecycle", () => {
       expect(create).not.toHaveBeenCalled();
       // Bounded: exactly one re-probe beyond the initial park, not a spin.
       expect(availability.mock.calls.length).toBe(callsAtPark + 1);
+    });
+
+    test("a joined download refused with NotAllowedError twice throws MissingUserActivationError after exactly one re-probe (D8)", async () => {
+      // Every probe answers "downloading" and every join is refused — the
+      // task-await in the "downloading" case re-parks to "downloadable" each
+      // time, so this exercises the same reprobed-bound as the plain
+      // "downloadable" case above, just entered via a join instead of a
+      // direct park.
+      const availability = vi.fn(() => Promise.resolve("downloading" as const));
+      const create = vi.fn(() =>
+        Promise.reject(new DOMException("needs a gesture", "NotAllowedError")),
+      );
+      vi.stubGlobal(NAMESPACE, { availability, create });
+
+      const { result } = await renderHook(() =>
+        useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
+      );
+      // The initial join is refused too — settles at "downloadable" before
+      // acquire() is ever called.
+      await vi.waitFor(() =>
+        expect(result.current.status).toBe("downloadable"),
+      );
+      const callsAtPark = availability.mock.calls.length;
+      const createCallsAtPark = create.mock.calls.length;
+
+      await expect(result.current.acquire()).rejects.toBeInstanceOf(
+        MissingUserActivationError,
+      );
+
+      expect(result.current.status).toBe("downloadable");
+      // Bounded: exactly one re-probe (and one re-join) beyond the park.
+      expect(availability.mock.calls.length).toBe(callsAtPark + 1);
+      expect(create.mock.calls.length).toBe(createCallsAtPark + 1);
     });
 
     test("acquire() rejects with the caller's abort reason when aborted during the gesture-less re-probe", async () => {
