@@ -81,6 +81,22 @@ if (!isSupported("Translator")) return <Fallback />;
 
 `isSupported(name)` returns `true` when the matching global (`"Translator"`, `"Rewriter"`, `"Proofreader"`, `"Summarizer"`, `"Writer"`, `"LanguageDetector"`) is present on `globalThis`. Combine with the hook's `status` (`"unavailable"`) for the full readiness picture — the global can exist on a device that still can't run the model.
 
+### Checking availability without a hook
+
+`checkAvailability(name, options?)` runs the same on-device readiness probe every hook and creator uses internally, without mounting a hook or creating an instance — useful for a capability list or settings screen that needs a real status for options the user hasn't committed to yet:
+
+```tsx
+import { checkAvailability } from "@shayc/react-built-in-ai";
+
+const availability = await checkAvailability("Translator", {
+  sourceLanguage: "en",
+  targetLanguage: "es",
+});
+// "available" | "downloadable" | "downloading" | "unavailable"
+```
+
+It throws `UnsupportedError` when the global is absent — check `isSupported()` first if you'd rather branch on that yourself. Unlike the hook's `status`, this is a one-shot probe: it doesn't stay in sync if availability changes afterward.
+
 ## Lifecycle
 
 Every hook exposes `status`, `progress`, `error`, and `prepare`. `status` is always one of:
