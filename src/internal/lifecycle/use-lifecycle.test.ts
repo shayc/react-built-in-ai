@@ -18,7 +18,7 @@ import {
   UnsupportedError,
 } from "../../errors";
 import type { BuiltInAIName } from "../../is-supported";
-import { makeAIFake } from "../testing/ai-namespace-fake";
+import { buildAIFake } from "../testing/ai-namespace-fake";
 import {
   __resetForTests,
   __sizeForTests,
@@ -77,7 +77,7 @@ describe("useLifecycle", () => {
   });
 
   test("transitions checking → ready when availability is 'available'", async () => {
-    const { Fake, create } = makeAIFake({
+    const { Fake, create } = buildAIFake({
       status: "available",
       buildInstance: () => buildInstance({ marker: "primary" }),
     });
@@ -133,7 +133,7 @@ describe("useLifecycle", () => {
   });
 
   test("settles at unavailable and never calls create", async () => {
-    const { Fake, create } = makeAIFake({
+    const { Fake, create } = buildAIFake({
       status: "unavailable",
       buildInstance,
     });
@@ -148,7 +148,7 @@ describe("useLifecycle", () => {
   });
 
   test("settles in 'downloadable' when a download is required and never auto-creates", async () => {
-    const { Fake, create } = makeAIFake({
+    const { Fake, create } = buildAIFake({
       status: "downloadable",
       buildInstance,
     });
@@ -272,7 +272,7 @@ describe("useLifecycle", () => {
   });
 
   test("prepare() rejects with MissingUserActivationError when downloadable without activation", async () => {
-    const { Fake } = makeAIFake({
+    const { Fake } = buildAIFake({
       status: "downloadable",
       buildInstance,
     });
@@ -292,7 +292,7 @@ describe("useLifecycle", () => {
   });
 
   test("prepare() triggers download and reaches ready when userActivation is active", async () => {
-    const { Fake, create } = makeAIFake({
+    const { Fake, create } = buildAIFake({
       status: "downloadable",
       buildInstance,
     });
@@ -425,7 +425,7 @@ describe("useLifecycle", () => {
 
   test("surfaces a create rejection as status='error' with BuiltInAIError wrapping the cause", async () => {
     const original = new Error("create failed");
-    const { Fake } = makeAIFake({
+    const { Fake } = buildAIFake({
       status: "available",
       buildInstance,
       failCreate: original,
@@ -484,7 +484,7 @@ describe("useLifecycle", () => {
 
   test("prepare() rejects with NotReadyError when the retry also fails", async () => {
     const original = new Error("persistent failure");
-    const { Fake, create } = makeAIFake({
+    const { Fake, create } = buildAIFake({
       status: "available",
       buildInstance,
       failCreate: original,
@@ -505,7 +505,7 @@ describe("useLifecycle", () => {
 
   test("acquire() resolves with { instance, signal } once ready", async () => {
     const inst = buildInstance({ marker: "live" });
-    const { Fake } = makeAIFake({
+    const { Fake } = buildAIFake({
       status: "available",
       buildInstance: () => inst,
     });
@@ -618,7 +618,7 @@ describe("useLifecycle", () => {
   });
 
   test("acquire() throws UnavailableError when status='unavailable'", async () => {
-    const { Fake } = makeAIFake({
+    const { Fake } = buildAIFake({
       status: "unavailable",
       buildInstance,
     });
@@ -636,7 +636,7 @@ describe("useLifecycle", () => {
 
   test("acquire() throws NotReadyError carrying the original cause when status='error'", async () => {
     const original = new Error("blew up");
-    const { Fake } = makeAIFake({
+    const { Fake } = buildAIFake({
       status: "available",
       buildInstance,
       failCreate: original,
@@ -659,7 +659,7 @@ describe("useLifecycle", () => {
 
   test("destroys the instance on unmount", async () => {
     const inst = buildInstance({ marker: "doomed" });
-    const { Fake } = makeAIFake({
+    const { Fake } = buildAIFake({
       status: "available",
       buildInstance: () => inst,
     });
@@ -728,7 +728,7 @@ describe("useLifecycle", () => {
     const first = buildInstance({ marker: "one" });
     const second = buildInstance({ marker: "two" });
     const queue: TestInstance[] = [first, second];
-    const { Fake, create } = makeAIFake({
+    const { Fake, create } = buildAIFake({
       status: "available",
       buildInstance: () => queue.shift()!,
     });
@@ -748,7 +748,7 @@ describe("useLifecycle", () => {
   });
 
   test("does NOT re-create when a new options object is shallow-equal to the previous one", async () => {
-    const { Fake, create } = makeAIFake({
+    const { Fake, create } = buildAIFake({
       status: "available",
       buildInstance,
     });
@@ -767,7 +767,7 @@ describe("useLifecycle", () => {
   });
 
   test("inline array-valued options do not re-create or loop renders", async () => {
-    const { Fake, create } = makeAIFake({
+    const { Fake, create } = buildAIFake({
       status: "available",
       buildInstance,
     });
@@ -793,7 +793,7 @@ describe("useLifecycle", () => {
     const first = buildInstance({ marker: "one" });
     const second = buildInstance({ marker: "two" });
     const queue: TestInstance[] = [first, second];
-    const { Fake, create } = makeAIFake({
+    const { Fake, create } = buildAIFake({
       status: "available",
       buildInstance: () => queue.shift()!,
     });
@@ -825,7 +825,7 @@ describe("useLifecycle", () => {
   });
 
   test("acquire() rejects with MissingUserActivationError when downloadable without activation", async () => {
-    const { Fake } = makeAIFake({
+    const { Fake } = buildAIFake({
       status: "downloadable",
       buildInstance,
     });
@@ -843,7 +843,7 @@ describe("useLifecycle", () => {
   });
 
   test("acquire() from downloadable with activation drives the download and resolves", async () => {
-    const { Fake, create, instances } = makeAIFake({
+    const { Fake, create, instances } = buildAIFake({
       status: "downloadable",
       buildInstance: () => buildInstance({ marker: "gesture" }),
     });
@@ -884,7 +884,7 @@ describe("useLifecycle", () => {
   });
 
   test("acquire() after unmount rejects with AbortError", async () => {
-    const { Fake } = makeAIFake({
+    const { Fake } = buildAIFake({
       status: "available",
       buildInstance: () => buildInstance({ marker: "post-unmount" }),
     });
@@ -928,7 +928,7 @@ describe("useLifecycle", () => {
   });
 
   test("StrictMode double-mount does not create or leak duplicate instances", async () => {
-    const { Fake, create, instances } = makeAIFake({
+    const { Fake, create, instances } = buildAIFake({
       status: "available",
       buildInstance: () => buildInstance({ marker: "strict" }),
     });
@@ -1033,7 +1033,7 @@ describe("useLifecycle", () => {
   });
 
   test("two hook instances with different options track lifecycle independently", async () => {
-    const { Fake, create, instances } = makeAIFake({
+    const { Fake, create, instances } = buildAIFake({
       status: "available",
       buildInstance: () => buildInstance(),
     });
@@ -1170,7 +1170,7 @@ describe("useLifecycle", () => {
 
       // No setUserActivation(true) — default from beforeEach is false, so
       // acquire() drives the gesture-less re-probe (→ "checking") instead of
-      // kickoff(). Calling acquire() synchronously runs ensureReady() up to
+      // beginDownload(). Calling acquire() synchronously runs ensureReady() up to
       // its first await, which lands inside that re-probe's
       // availability() call — so by the time acquire() returns, the second
       // call has already happened and can be aborted immediately.
@@ -1262,7 +1262,7 @@ describe("useLifecycle", () => {
 
   describe("instance sharing (registry)", () => {
     test("two components with equal options share one store: one create() call, both report ready", async () => {
-      const { Fake, create, instances } = makeAIFake({
+      const { Fake, create, instances } = buildAIFake({
         status: "available",
         buildInstance: () => buildInstance({ marker: "shared" }),
       });
@@ -1285,7 +1285,7 @@ describe("useLifecycle", () => {
 
     test("unmounting one of two holders leaves the instance alive; unmounting the last destroys it", async () => {
       const inst = buildInstance({ marker: "refcounted" });
-      const { Fake } = makeAIFake({
+      const { Fake } = buildAIFake({
         status: "available",
         buildInstance: () => inst,
       });
@@ -1313,7 +1313,7 @@ describe("useLifecycle", () => {
       const first = buildInstance({ marker: "one" });
       const second = buildInstance({ marker: "two" });
       const queue: TestInstance[] = [first, second];
-      const { Fake, create } = makeAIFake({
+      const { Fake, create } = buildAIFake({
         status: "available",
         buildInstance: () => queue.shift()!,
       });
@@ -1353,7 +1353,7 @@ describe("useLifecycle", () => {
       const first = buildInstance({ marker: "one" });
       const second = buildInstance({ marker: "two" });
       const queue: TestInstance[] = [first, second];
-      const { Fake, create } = makeAIFake({
+      const { Fake, create } = buildAIFake({
         status: "available",
         buildInstance: () => queue.shift()!,
       });
@@ -1393,7 +1393,7 @@ describe("useLifecycle", () => {
     });
 
     test("two hook calls with the same options in one component converge without a render loop", async () => {
-      const { Fake, create, instances } = makeAIFake({
+      const { Fake, create, instances } = buildAIFake({
         status: "available",
         buildInstance: () => buildInstance(),
       });
@@ -1435,7 +1435,7 @@ describe("useLifecycle", () => {
       // this instead asserts the invariant structurally (calling
       // acquire() on both hooks immediately after mount, across StrictMode
       // on/off) rather than reproducing the race itself.
-      const { Fake } = makeAIFake({
+      const { Fake } = buildAIFake({
         status: "available",
         buildInstance: () => buildInstance(),
       });
@@ -1473,7 +1473,7 @@ describe("useLifecycle", () => {
     });
 
     test("rapid sequential options changes never leave more than the committed key retained", async () => {
-      const { Fake } = makeAIFake({
+      const { Fake } = buildAIFake({
         status: "available",
         buildInstance: () => buildInstance(),
       });

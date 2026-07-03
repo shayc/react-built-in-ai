@@ -1,12 +1,12 @@
 import { describe, expect, test, vi } from "vitest";
 import { renderHook } from "vitest-browser-react";
-import { makeAIFake } from "../internal/testing/ai-namespace-fake";
+import { buildAIFake } from "../internal/testing/ai-namespace-fake";
 import { buildWriterInstance } from "../internal/testing/instance-fakes";
 import { useWriter } from "./use-writer";
 
 describe("useWriter", () => {
   test("exposes the instance's inputQuota once ready", async () => {
-    const { Fake } = makeAIFake({ buildInstance: buildWriterInstance });
+    const { Fake } = buildAIFake({ buildInstance: buildWriterInstance });
     vi.stubGlobal("Writer", Fake);
 
     const { result } = await renderHook(() => useWriter({ tone: "formal" }));
@@ -16,7 +16,7 @@ describe("useWriter", () => {
   });
 
   test("write() forwards input and context, resolving with the instance's result", async () => {
-    const { Fake } = makeAIFake({ buildInstance: buildWriterInstance });
+    const { Fake } = buildAIFake({ buildInstance: buildWriterInstance });
     vi.stubGlobal("Writer", Fake);
 
     const { result } = await renderHook(() => useWriter());
@@ -28,7 +28,7 @@ describe("useWriter", () => {
   });
 
   test("writeStream() yields the instance's chunks", async () => {
-    const { Fake } = makeAIFake({ buildInstance: buildWriterInstance });
+    const { Fake } = buildAIFake({ buildInstance: buildWriterInstance });
     vi.stubGlobal("Writer", Fake);
 
     const { result } = await renderHook(() => useWriter());
@@ -42,7 +42,7 @@ describe("useWriter", () => {
   });
 
   test("measureInput() forwards input and context to the instance", async () => {
-    const { Fake, instances } = makeAIFake({
+    const { Fake, instances } = buildAIFake({
       buildInstance: buildWriterInstance,
     });
     vi.stubGlobal("Writer", Fake);

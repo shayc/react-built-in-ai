@@ -1,12 +1,12 @@
 import { describe, expect, test, vi } from "vitest";
 import { renderHook } from "vitest-browser-react";
-import { makeAIFake } from "../internal/testing/ai-namespace-fake";
+import { buildAIFake } from "../internal/testing/ai-namespace-fake";
 import { buildLanguageDetectorInstance } from "../internal/testing/instance-fakes";
 import { useLanguageDetector } from "./use-language-detector";
 
 describe("useLanguageDetector", () => {
   test("exposes the instance's inputQuota once ready", async () => {
-    const { Fake } = makeAIFake({
+    const { Fake } = buildAIFake({
       buildInstance: buildLanguageDetectorInstance,
     });
     vi.stubGlobal("LanguageDetector", Fake);
@@ -18,7 +18,7 @@ describe("useLanguageDetector", () => {
   });
 
   test("detect() forwards input and resolves with the instance's ranked candidates", async () => {
-    const { Fake, instances } = makeAIFake({
+    const { Fake, instances } = buildAIFake({
       buildInstance: buildLanguageDetectorInstance,
     });
     vi.stubGlobal("LanguageDetector", Fake);

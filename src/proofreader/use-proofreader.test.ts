@@ -1,12 +1,12 @@
 import { describe, expect, test, vi } from "vitest";
 import { renderHook } from "vitest-browser-react";
-import { makeAIFake } from "../internal/testing/ai-namespace-fake";
+import { buildAIFake } from "../internal/testing/ai-namespace-fake";
 import { buildProofreaderInstance } from "../internal/testing/instance-fakes";
 import { useProofreader } from "./use-proofreader";
 
 describe("useProofreader", () => {
   test("proofread() forwards input and resolves with the instance's ProofreadResult", async () => {
-    const { Fake } = makeAIFake({ buildInstance: buildProofreaderInstance });
+    const { Fake } = buildAIFake({ buildInstance: buildProofreaderInstance });
     vi.stubGlobal("Proofreader", Fake);
 
     const { result } = await renderHook(() => useProofreader());

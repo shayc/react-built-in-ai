@@ -1,12 +1,12 @@
 import { describe, expect, test, vi } from "vitest";
 import { renderHook } from "vitest-browser-react";
-import { makeAIFake } from "../internal/testing/ai-namespace-fake";
+import { buildAIFake } from "../internal/testing/ai-namespace-fake";
 import { buildSummarizerInstance } from "../internal/testing/instance-fakes";
 import { useSummarizer } from "./use-summarizer";
 
 describe("useSummarizer", () => {
   test("exposes the instance's inputQuota once ready", async () => {
-    const { Fake } = makeAIFake({ buildInstance: buildSummarizerInstance });
+    const { Fake } = buildAIFake({ buildInstance: buildSummarizerInstance });
     vi.stubGlobal("Summarizer", Fake);
 
     const { result } = await renderHook(() =>
@@ -18,7 +18,7 @@ describe("useSummarizer", () => {
   });
 
   test("summarize() forwards input and context, resolving with the instance's result", async () => {
-    const { Fake } = makeAIFake({ buildInstance: buildSummarizerInstance });
+    const { Fake } = buildAIFake({ buildInstance: buildSummarizerInstance });
     vi.stubGlobal("Summarizer", Fake);
 
     const { result } = await renderHook(() => useSummarizer());
@@ -30,7 +30,7 @@ describe("useSummarizer", () => {
   });
 
   test("summarizeStream() yields the instance's chunks", async () => {
-    const { Fake } = makeAIFake({ buildInstance: buildSummarizerInstance });
+    const { Fake } = buildAIFake({ buildInstance: buildSummarizerInstance });
     vi.stubGlobal("Summarizer", Fake);
 
     const { result } = await renderHook(() => useSummarizer());
@@ -44,7 +44,7 @@ describe("useSummarizer", () => {
   });
 
   test("measureInput() forwards input and context to the instance", async () => {
-    const { Fake, instances } = makeAIFake({
+    const { Fake, instances } = buildAIFake({
       buildInstance: buildSummarizerInstance,
     });
     vi.stubGlobal("Summarizer", Fake);

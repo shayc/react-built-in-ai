@@ -1,12 +1,12 @@
 import { describe, expect, test, vi } from "vitest";
 import { renderHook } from "vitest-browser-react";
-import { makeAIFake } from "../internal/testing/ai-namespace-fake";
+import { buildAIFake } from "../internal/testing/ai-namespace-fake";
 import { buildTranslatorInstance } from "../internal/testing/instance-fakes";
 import { useTranslator } from "./use-translator";
 
 describe("useTranslator", () => {
   test("exposes the instance's inputQuota once ready", async () => {
-    const { Fake } = makeAIFake({ buildInstance: buildTranslatorInstance });
+    const { Fake } = buildAIFake({ buildInstance: buildTranslatorInstance });
     vi.stubGlobal("Translator", Fake);
 
     const { result } = await renderHook(() =>
@@ -18,7 +18,7 @@ describe("useTranslator", () => {
   });
 
   test("translate() forwards input and resolves with the instance's result", async () => {
-    const { Fake } = makeAIFake({ buildInstance: buildTranslatorInstance });
+    const { Fake } = buildAIFake({ buildInstance: buildTranslatorInstance });
     vi.stubGlobal("Translator", Fake);
 
     const { result } = await renderHook(() =>
@@ -30,7 +30,7 @@ describe("useTranslator", () => {
   });
 
   test("translateStream() yields the instance's chunks", async () => {
-    const { Fake } = makeAIFake({ buildInstance: buildTranslatorInstance });
+    const { Fake } = buildAIFake({ buildInstance: buildTranslatorInstance });
     vi.stubGlobal("Translator", Fake);
 
     const { result } = await renderHook(() =>

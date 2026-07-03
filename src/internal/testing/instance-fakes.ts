@@ -1,10 +1,10 @@
 import { vi } from "vitest";
-import { makeChunkStream } from "./stream-fake";
+import { buildChunkStream } from "./stream-fake";
 
 export function buildTranslatorInstance() {
   return {
     translate: vi.fn((input: string) => Promise.resolve(`T:${input}`)),
-    translateStreaming: vi.fn(() => makeChunkStream(["T:", "hello"])),
+    translateStreaming: vi.fn(() => buildChunkStream(["T:", "hello"])),
     measureInputUsage: vi.fn(() => Promise.resolve(7)),
     inputQuota: 1024,
     destroy: vi.fn<() => void>(),
@@ -16,7 +16,7 @@ export function buildRewriterInstance() {
     rewrite: vi.fn((input: string, opts?: RewriterRewriteOptions) =>
       Promise.resolve(`R(${opts?.context ?? ""}):${input}`),
     ),
-    rewriteStreaming: vi.fn(() => makeChunkStream(["R:", "alt"])),
+    rewriteStreaming: vi.fn(() => buildChunkStream(["R:", "alt"])),
     measureInputUsage: vi.fn(() => Promise.resolve(4)),
     inputQuota: 768,
     destroy: vi.fn<() => void>(),
@@ -47,7 +47,7 @@ export function buildSummarizerInstance() {
     summarize: vi.fn((input: string, opts?: SummarizerSummarizeOptions) =>
       Promise.resolve(`S(${opts?.context ?? ""}):${input}`),
     ),
-    summarizeStreaming: vi.fn(() => makeChunkStream(["S:", "sum"])),
+    summarizeStreaming: vi.fn(() => buildChunkStream(["S:", "sum"])),
     measureInputUsage: vi.fn(() => Promise.resolve(5)),
     inputQuota: 2048,
     destroy: vi.fn<() => void>(),
@@ -59,7 +59,7 @@ export function buildWriterInstance() {
     write: vi.fn((input: string, opts?: WriterWriteOptions) =>
       Promise.resolve(`W(${opts?.context ?? ""}):${input}`),
     ),
-    writeStreaming: vi.fn(() => makeChunkStream(["W:", "draft"])),
+    writeStreaming: vi.fn(() => buildChunkStream(["W:", "draft"])),
     measureInputUsage: vi.fn(() => Promise.resolve(6)),
     inputQuota: 1536,
     destroy: vi.fn<() => void>(),
