@@ -8,6 +8,8 @@ export {
 
 export { isSupported, type BuiltInAIName } from "./is-supported";
 
+export { checkAvailability } from "./check-availability";
+
 export type { BaseHookReturn, Status } from "./types";
 
 export { useGlobalDownloadProgress } from "./use-global-download-progress";
