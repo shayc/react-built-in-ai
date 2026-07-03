@@ -38,7 +38,7 @@ export function buildKey(
   // JSON.stringify drops undefined-valued props, so an options object made
   // entirely of them (e.g. `{ foo: undefined }`) serializes to "{}" — the
   // same as an empty object. Collapse both to the bare name so they share
-  // a store, per D1 in PLAN-store-registry.md.
+  // a store.
   return json === "{}" ? globalName : `${globalName}:${json}`;
 }
 
@@ -102,6 +102,11 @@ export function release(key: string): void {
 //    token per call rather than by options — so one aborted call among
 //    several identical-options creators can't blank the others' progress
 //    by clearing a key they still share.
+//
+// Both sources seed `progress: null` until the browser reports a real
+// fraction — the aggregate coalesces `null` to `0` per-entry before taking
+// the min, so an unsignaled download still shows up as "in flight" instead
+// of vanishing from the aggregate.
 
 const downloadListeners = new Set<() => void>();
 
@@ -121,7 +126,7 @@ export function subscribeDownloads(listener: () => void): () => void {
 
 interface ExternalDownload {
   key: string;
-  progress: number;
+  progress: number | null;
 }
 
 let nextExternalToken = 0;
@@ -131,7 +136,9 @@ const externalDownloads = new Map<number, ExternalDownload>();
 export function beginExternalDownload(key: string): number {
   const token = nextExternalToken;
   nextExternalToken += 1;
-  externalDownloads.set(token, { key, progress: 0 });
+  // null, not 0: a number means the browser actually reported this fraction
+  // via downloadprogress.
+  externalDownloads.set(token, { key, progress: null });
   notifyDownloads();
   return token;
 }
@@ -165,7 +172,10 @@ function matchesPrefix(key: string, prefixes: readonly string[]): boolean {
  * longest to go — across both retained stores and external creator calls,
  * or `null` when none are in flight. Min-aggregation means the reported
  * value only ever rises as downloads complete, so the aggregate never snaps
- * backwards.
+ * backwards. A download in flight with no progress signal yet contributes
+ * `0` — the honest floor — rather than dropping out of the aggregate, which
+ * would otherwise make a download vanish from consumer UIs while it's
+ * genuinely running.
  *
  * @internal
  */
@@ -178,16 +188,18 @@ export function snapshotDownloadProgress(
       continue;
     }
     const snapshot = entry.store.getSnapshot();
-    if (snapshot.status !== "downloading" || snapshot.progress === null) {
+    if (snapshot.status !== "downloading") {
       continue;
     }
-    min = min === null ? snapshot.progress : Math.min(min, snapshot.progress);
+    const progress = snapshot.progress ?? 0;
+    min = min === null ? progress : Math.min(min, progress);
   }
   for (const { key, progress } of externalDownloads.values()) {
     if (!matchesPrefix(key, prefixes)) {
       continue;
     }
-    min = min === null ? progress : Math.min(min, progress);
+    const p = progress ?? 0;
+    min = min === null ? p : Math.min(min, p);
   }
   return min;
 }

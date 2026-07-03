@@ -13,9 +13,14 @@ import type { BuiltInAIName } from "./is-supported";
  *
  * Aggregating with min means a finishing download never snaps the value
  * backwards. It is not strictly monotonic: a download that starts mid-flight
- * joins at 0 and lowers the value. Finished downloads leave the store, so the
- * value returns to `null` (rather than reporting `1`) once every matching
- * download completes — key "done" off `null`, not `progress === 1`.
+ * joins at 0 and lowers the value — including a download observed passively
+ * (started elsewhere: another hook, another tab, an imperative creator) that
+ * hasn't yet reported a real fraction. `0` here means "in flight with no
+ * progress signal yet" as often as it means a genuine browser-reported 0;
+ * either way, treat it as "downloading, percentage unknown". Finished
+ * downloads leave the store, so the value returns to `null` (rather than
+ * reporting `1`) once every matching download completes — key "done" off
+ * `null`, not `progress === 1`.
  *
  * @param namespaces - Restrict aggregation to one API or an array of APIs.
  * Omit (or pass `undefined`) to aggregate across every built-in AI download

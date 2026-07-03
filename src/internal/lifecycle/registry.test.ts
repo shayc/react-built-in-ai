@@ -30,8 +30,7 @@ describe("buildKey", () => {
 
   test("an options object made entirely of undefined-valued props equals the bare name", () => {
     // JSON.stringify drops undefined-valued props, so { foo: undefined }
-    // serializes the same as {} — both must collapse to the bare name, per
-    // D1 in PLAN-store-registry.md.
+    // serializes the same as {} — both must collapse to the bare name.
     expect(buildKey("Summarizer", { foo: undefined })).toBe("Summarizer");
   });
 });

@@ -104,8 +104,8 @@ Every hook exposes `status`, `progress`, `error`, and `prepare`. `status` is alw
 - **`unsupported`** — the global namespace is missing on this browser.
 - **`unavailable`** — the model reports it cannot run on this device.
 - **`checking`** — supported; probing availability, or quietly creating an already-downloaded model. Passes through to `ready` on its own.
-- **`downloadable`** — the model needs a download, which the browser only starts from a **user activation**. Render your download affordance off this state; `prepare()` (or any action method) called from a user gesture moves it along. Mirrors the browser's `availability()` vocabulary. A gesture-less call re-checks once before failing, in case the model finished downloading elsewhere (another component, another tab) since this hook last checked.
-- **`downloading`** — the fetch is running. `progress` ticks from `0` to `1`.
+- **`downloadable`** — the model needs a download, which the browser only starts from a **user activation**. Render your download affordance off this state; `prepare()` (or any action method) called from a user gesture moves it along. Mirrors the browser's `availability()` vocabulary. A gesture-less call re-checks once before failing, in case the model finished downloading — or is mid-download, in which case the download is joined — elsewhere (another component, another tab) since this hook last checked.
+- **`downloading`** — a fetch is running, either started by this hook or joined passively (the browser already reported a download in flight when this hook probed — e.g. another hook with different options, another tab, or an imperative `create*` call). `progress` is a number only once the browser has reported a fraction via a `downloadprogress` event; otherwise it's `null` — no starting value is ever fabricated, so a joined download that's already partway done isn't misreported as `0`.
 - **`ready`** — the instance is live; action methods can be called freely.
 - **`error`** — `availability()` or `create()` rejected. Call `prepare()` (from a user activation if a download is required) to tear down and re-initialize.
 
@@ -140,9 +140,11 @@ function Demo() {
         console.log(out);
       }}
     >
-      {translator.status === "downloading"
-        ? `Downloading (${(translator.progress ?? 0) * 100}%)`
-        : "Translate"}
+      {translator.status !== "downloading"
+        ? "Translate"
+        : translator.progress === null // null until the browser reports a fraction
+          ? "Downloading…"
+          : `Downloading (${Math.round(translator.progress * 100)}%)`}
     </button>
   );
 }
@@ -182,7 +184,7 @@ The returned instance is `AsyncDisposable` — prefer `await using` so it's rele
 
 Each creator accepts the same options as its hook, plus an optional `signal` that cancels both the download (if any) and the underlying `create()` call.
 
-Because a creator requires a user activation when a download is needed, prefer calling it from an event handler — or pre-warm the model via the matching hook elsewhere in the tree before the call site is reached.
+A creator requires a user activation only to _start_ a download (`availability()` reporting `"downloadable"`) — prefer calling it from an event handler, or pre-warm the model via the matching hook elsewhere in the tree before the call site is reached. If a download is already in flight elsewhere (`"downloading"`), the creator joins it gesture-free, same as a hook that finds one on probe.
 
 ## Download progress
 
@@ -209,12 +211,12 @@ function GlobalDownloadBar() {
 
 Lifecycle gating throws `BuiltInAIError` subclasses. Action methods (`translate`, `rewrite`, …) pass the browser API's own rejections through unchanged — most commonly an `AbortError` `DOMException` when a `signal` fires. When the lifecycle wraps a browser rejection into `"error"` state, the original error is preserved as `error.cause`.
 
-| Error                        | What to do                                                                                                                    |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `UnsupportedError`           | The namespace is missing. Feature-detect with `isSupported()` and render a fallback.                                          |
-| `UnavailableError`           | The device can't run the model. Render a fallback; don't retry.                                                               |
-| `MissingUserActivationError` | A download was needed without a user gesture. Trigger `prepare()` (or the first action) from a click/keypress handler.        |
-| `NotReadyError`              | A prior `create()` failed. Call `prepare()` from a user activation to retry; inspect `error.cause` for the underlying reason. |
+| Error                        | What to do                                                                                                                       |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `UnsupportedError`           | The namespace is missing. Feature-detect with `isSupported()` and render a fallback.                                             |
+| `UnavailableError`           | The device can't run the model. Render a fallback; don't retry.                                                                  |
+| `MissingUserActivationError` | A download needed to be started without a user gesture. Trigger `prepare()` (or the first action) from a click/keypress handler. |
+| `NotReadyError`              | A prior `create()` failed. Call `prepare()` from a user activation to retry; inspect `error.cause` for the underlying reason.    |
 
 Components with equal options share one lifecycle: if another component sharing your options calls `prepare()` to retry from `"error"`, that restarts the shared store — any of your own in-flight `acquire()`-backed calls reject with a `DOMException` named `AbortError`. Filter it like any other cancellation (`error.name === "AbortError"`), not as a failure.
 

@@ -60,6 +60,32 @@ function emit(monitor: CreateMonitor, loaded: number): void {
   );
 }
 
+/** Starts a passively-joined download for `name`/`options` (no gesture needed). */
+async function startJoinedDownload(
+  name: BuiltInAIName,
+  options: TestOptions | undefined,
+): Promise<DownloadCall> {
+  const calls: DownloadCall[] = [];
+  const create = vi.fn((opts?: { monitor?: (m: CreateMonitor) => void }) => {
+    const monitor = new EventTarget() as CreateMonitor;
+    return new Promise<TestInstance>((resolve) => {
+      calls.push({ monitor, resolve });
+      opts?.monitor?.(monitor);
+    });
+  });
+  vi.stubGlobal(name, {
+    availability: vi.fn(() => Promise.resolve("downloading")),
+    create,
+  });
+
+  const { result } = await renderHook(() =>
+    useLifecycle<TestOptions, TestInstance>(name, options),
+  );
+  await vi.waitFor(() => expect(result.current.status).toBe("downloading"));
+
+  return calls[0];
+}
+
 /** Starts a hook-driven download for `name`/`options` and leaves it parked "downloading". */
 async function startHookDownload(
   name: BuiltInAIName,
@@ -348,6 +374,32 @@ describe("useGlobalDownloadProgress", () => {
 
     calls[1].resolve({ destroy: vi.fn() });
     await second;
+    await vi.waitFor(() => expect(result.current).toBeNull());
+  });
+
+  test("a passively-joined download with unknown progress contributes 0 to the aggregate", async () => {
+    const { result } = await renderHook(() =>
+      useGlobalDownloadProgress("Proofreader"),
+    );
+    expect(result.current).toBeNull();
+
+    const active = await startHookDownload("Proofreader", { mode: "a" });
+    emit(active.monitor, 0.4);
+    await vi.waitFor(() => expect(result.current).toBe(0.4));
+
+    // The joined store reports no progress yet — it contributes 0, so the
+    // min-aggregate drops to 0 instead of staying at the active download's
+    // 0.4 or (wrongly) skipping the joined download entirely.
+    const joined = await startJoinedDownload("Proofreader", { mode: "b" });
+    await vi.waitFor(() => expect(result.current).toBe(0));
+
+    active.resolve({ destroy: vi.fn() });
+    await vi.waitFor(() => expect(result.current).toBe(0));
+
+    emit(joined.monitor, 0.7);
+    await vi.waitFor(() => expect(result.current).toBe(0.7));
+
+    joined.resolve({ destroy: vi.fn() });
     await vi.waitFor(() => expect(result.current).toBeNull());
   });
 

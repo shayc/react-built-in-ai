@@ -15,8 +15,10 @@ export interface CreateRewriterOptions extends RewriterOptions {
  * call sites that decide options mid-flow and can't render a hook.
  *
  * Throws {@link UnsupportedError}, {@link UnavailableError}, or
- * {@link MissingUserActivationError} — call from a user-activation handler when a
- * download may be required, or pre-warm via {@link useRewriter}. Other browser
+ * {@link MissingUserActivationError} — a user activation is required only to
+ * start a download; one already in flight is joined gesture-free. Call from a
+ * user-activation handler when a download may need starting, or pre-warm via
+ * {@link useRewriter}. Other browser
  * rejections (e.g. `AbortError` when `signal` fires, `NetworkError` on
  * download failure) surface unchanged; use `instanceof BuiltInAIError` to
  * separate library errors from pass-through rejections. The returned instance
