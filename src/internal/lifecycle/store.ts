@@ -96,10 +96,11 @@ export function createStore<
 ) {
   const listeners = new Set<() => void>();
 
-  // Epoch context, orthogonal to `state` — reset wholesale by start/stop. The
-  // controller's identity is the generation token acquire() checks after
-  // awaiting. `options` is fixed for this store's lifetime — a different
-  // options value is a different registry key, hence a different store.
+  // Epoch context, orthogonal to `state`. start() resets it wholesale;
+  // stop() only aborts the current controller. The controller's identity is
+  // the generation token acquire() checks after awaiting. `options` is fixed
+  // for this store's lifetime — a different options value is a different
+  // registry key, hence a different store.
   let namespace: AINamespace<Options, Model> | undefined;
   let abortController = new AbortController();
 
@@ -133,9 +134,10 @@ export function createStore<
 
   // Probes availability and settles the store: "unavailable" is terminal,
   // "available" provisions immediately, "downloading" joins an in-flight
-  // external download (gesture-free — browsers require activation to start
-  // a download, not to observe one already authorized elsewhere), and
-  // "downloadable" parks until prepare() or an action provides a gesture.
+  // external download (gesture-free — activation authorizes starting a
+  // fetch, not observing one), and "downloadable" parks until prepare() or
+  // an action provides a gesture. A browser that refuses a gesture-free
+  // join anyway is re-parked by runProvision()'s NotAllowedError case.
   // Used both for the initial probe (from start()) and to revalidate a parked
   // store without a gesture (from ensureReady()'s "downloadable" case) — both
   // are "is a download still actually required?" questions with the same answer.

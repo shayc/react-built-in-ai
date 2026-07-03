@@ -54,6 +54,7 @@ export interface WriterHookReturn extends BaseHookReturn {
  * @example
  * ```tsx
  * function Draft({ prompt }: { prompt: string }) {
+ *   const [output, setOutput] = useState("");
  *   const writer = useWriter({ tone: "formal", length: "short" });
  *   return (
  *     <button

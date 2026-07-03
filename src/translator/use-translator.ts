@@ -61,12 +61,15 @@ export interface TranslatorHookReturn extends BaseHookReturn {
  * @example
  * ```tsx
  * function Translate({ text }: { text: string }) {
- *   const [out, setOut] = useState("");
- *   const t = useTranslator({ sourceLanguage: "en", targetLanguage: "es" });
+ *   const [output, setOutput] = useState("");
+ *   const translator = useTranslator({
+ *     sourceLanguage: "en",
+ *     targetLanguage: "es",
+ *   });
  *   return (
  *     <button
- *       disabled={t.status === "downloading"}
- *       onClick={async () => setOut(await t.translate(text))}
+ *       disabled={translator.status === "downloading"}
+ *       onClick={async () => setOutput(await translator.translate(text))}
  *     >
  *       Translate
  *     </button>
