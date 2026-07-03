@@ -3,7 +3,7 @@
  *
  * @internal
  */
-export function makeChunkStream(
+export function buildChunkStream(
   chunks: readonly string[],
 ): ReadableStream<string> {
   return new ReadableStream<string>({

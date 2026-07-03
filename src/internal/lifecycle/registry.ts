@@ -160,7 +160,7 @@ export function endExternalDownload(token: number): void {
   }
 }
 
-function matchesPrefix(key: string, prefixes: readonly string[]): boolean {
+function matchesAnyPrefix(key: string, prefixes: readonly string[]): boolean {
   return (
     prefixes.length === 0 ||
     prefixes.some((prefix) => key === prefix || key.startsWith(`${prefix}:`))
@@ -181,7 +181,7 @@ export function snapshotDownloadProgress(
 ): number | null {
   let min: number | null = null;
   for (const [key, entry] of entries) {
-    if (!matchesPrefix(key, prefixes)) {
+    if (!matchesAnyPrefix(key, prefixes)) {
       continue;
     }
     const snapshot = entry.store.getSnapshot();
@@ -191,12 +191,12 @@ export function snapshotDownloadProgress(
     const progress = snapshot.progress ?? 0;
     min = min === null ? progress : Math.min(min, progress);
   }
-  for (const { key, progress } of externalDownloads.values()) {
-    if (!matchesPrefix(key, prefixes)) {
+  for (const external of externalDownloads.values()) {
+    if (!matchesAnyPrefix(external.key, prefixes)) {
       continue;
     }
-    const p = progress ?? 0;
-    min = min === null ? p : Math.min(min, p);
+    const progress = external.progress ?? 0;
+    min = min === null ? progress : Math.min(min, progress);
   }
   return min;
 }

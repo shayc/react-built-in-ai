@@ -15,13 +15,13 @@ import { getNamespace, type AINamespace } from "./types";
 
 /** @internal */
 export interface ProvisionInstanceOptions<
-  O extends object,
-  I extends DestroyableModel,
+  Options extends object,
+  Model extends DestroyableModel,
 > {
   /** Namespace already resolved by the caller. */
-  namespace: AINamespace<O, I>;
+  namespace: AINamespace<Options, Model>;
   /** Browser `create()` options, forwarded verbatim. */
-  options: O | undefined;
+  options: Options | undefined;
   /** `availability()` result the caller already probed. */
   availability: Availability;
   /** Cancels `create()`. */
@@ -45,9 +45,11 @@ export interface ProvisionInstanceOptions<
  * @internal
  */
 export async function provisionInstance<
-  O extends object,
-  I extends DestroyableModel,
->(params: ProvisionInstanceOptions<O, I>): Promise<I & AsyncDisposable> {
+  Options extends object,
+  Model extends DestroyableModel,
+>(
+  params: ProvisionInstanceOptions<Options, Model>,
+): Promise<Model & AsyncDisposable> {
   const { namespace, options, availability, signal, onProgress } = params;
 
   const requiresActivation = availability === "downloadable";
@@ -67,10 +69,10 @@ export async function provisionInstance<
           })
       : undefined,
   });
-  const disposable = instance as I & Partial<AsyncDisposable>;
+  const disposable = instance as Model & Partial<AsyncDisposable>;
   disposable[Symbol.asyncDispose] ??= () =>
     Promise.resolve(disposable.destroy());
-  return disposable as I & AsyncDisposable;
+  return disposable as Model & AsyncDisposable;
 }
 
 /**
@@ -86,14 +88,14 @@ export async function provisionInstance<
  * @internal
  */
 export async function provisionStandalone<
-  O extends object,
-  I extends DestroyableModel,
+  Options extends object,
+  Model extends DestroyableModel,
 >(
-  name: BuiltInAIName,
-  options: O | undefined,
+  globalName: BuiltInAIName,
+  options: Options | undefined,
   signal?: AbortSignal,
-): Promise<I & AsyncDisposable> {
-  const namespace = getNamespace<O, I>(name);
+): Promise<Model & AsyncDisposable> {
+  const namespace = getNamespace<Options, Model>(globalName);
   if (!namespace) {
     throw new UnsupportedError();
   }
@@ -105,10 +107,10 @@ export async function provisionStandalone<
 
   const willDownload = availability !== "available";
   const token = willDownload
-    ? beginExternalDownload(buildKey(name, options))
+    ? beginExternalDownload(buildKey(globalName, options))
     : null;
   try {
-    return await provisionInstance<O, I>({
+    return await provisionInstance<Options, Model>({
       namespace,
       options,
       availability,

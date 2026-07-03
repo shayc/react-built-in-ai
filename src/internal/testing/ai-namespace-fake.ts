@@ -7,7 +7,7 @@ export interface AIFake<I> {
   instances: I[];
 }
 
-export interface MakeAIFakeOptions<I> {
+export interface BuildAIFakeOptions<I> {
   status?: Availability;
   buildInstance: () => I;
   failCreate?: Error;
@@ -19,11 +19,11 @@ export interface MakeAIFakeOptions<I> {
  *
  * @internal
  */
-export function makeAIFake<I>({
+export function buildAIFake<I>({
   status = "available",
   buildInstance,
   failCreate,
-}: MakeAIFakeOptions<I>): AIFake<I> {
+}: BuildAIFakeOptions<I>): AIFake<I> {
   const instances: I[] = [];
   const availability = vi.fn(() => Promise.resolve(status));
   const create = vi.fn(() => {

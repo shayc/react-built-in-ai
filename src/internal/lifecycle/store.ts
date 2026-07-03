@@ -25,7 +25,7 @@ export interface Acquired<Model> {
 }
 
 interface ProvisionOptions {
-  showDownloadUI: boolean;
+  reportDownloading: boolean;
 }
 
 type InternalState<Model> =
@@ -65,7 +65,7 @@ function toSnapshot<Model>(state: InternalState<Model>): Snapshot {
   }
 }
 
-function wrap(error: unknown): BuiltInAIError {
+function toBuiltInAIError(error: unknown): BuiltInAIError {
   if (error instanceof BuiltInAIError) {
     return error;
   }
@@ -141,7 +141,7 @@ export function createStore<
   // Used both for the initial probe (from start()) and to revalidate a parked
   // store without a gesture (from ensureReady()'s "downloadable" case) — both
   // are "is a download still actually required?" questions with the same answer.
-  async function checkAvailability(signal: AbortSignal): Promise<void> {
+  async function runProbe(signal: AbortSignal): Promise<void> {
     try {
       const availability = await namespace!.availability(options);
       if (signal.aborted) {
@@ -152,14 +152,14 @@ export function createStore<
         return;
       }
       if (availability === "available") {
-        await provision(signal, { showDownloadUI: false }, availability);
+        await provision(signal, { reportDownloading: false }, availability);
         return;
       }
       if (availability === "downloading") {
         // Join gesture-free: the probe's job is to decide, not to download —
         // don't await, or this promise stays pending for the whole download
         // and pins the store in "checking" the entire time.
-        void provision(signal, { showDownloadUI: true }, availability);
+        void provision(signal, { reportDownloading: true }, availability);
         return;
       }
       // "downloadable": a fetch is needed, and starting one requires a user
@@ -169,17 +169,17 @@ export function createStore<
       if (signal.aborted) {
         return;
       }
-      transition({ kind: "error", error: wrap(error) });
+      transition({ kind: "error", error: toBuiltInAIError(error) });
     }
   }
 
   function provision(
     signal: AbortSignal,
-    { showDownloadUI }: ProvisionOptions,
+    { reportDownloading }: ProvisionOptions,
     availability: Availability,
   ): Promise<void> {
     const task = runProvision(signal, availability);
-    if (showDownloadUI) {
+    if (reportDownloading) {
       // null, not 0: a number means the browser actually reported this
       // fraction via downloadprogress. A joined download may already be
       // partway done; claiming 0 here would be a fabrication either way.
@@ -225,7 +225,7 @@ export function createStore<
       } else if (error instanceof UnavailableError) {
         transition({ kind: "unavailable" });
       } else if (error instanceof MissingUserActivationError) {
-        // kickoff() doesn't gate on activation itself — provisionInstance()
+        // beginDownload() doesn't gate on activation itself — provisionInstance()
         // is the actual gate, reached only when a caller drove provisioning
         // without one. Re-park rather than surface as a hard error.
         transition({ kind: "downloadable" });
@@ -242,11 +242,14 @@ export function createStore<
         // store terminates before create() is ever attempted.
         transition({ kind: "downloadable" });
       } else {
-        transition({ kind: "error", error: wrap(error) });
+        transition({ kind: "error", error: toBuiltInAIError(error) });
       }
     }
   }
 
+  // Swallows non-abort rejections deliberately: a failed task has already
+  // transitioned the store, and ensureReady()'s loop re-reads that state and
+  // throws the canonical error — rethrowing here would surface it twice.
   async function awaitTask(
     task: Promise<void>,
     callerSignal: AbortSignal | undefined,
@@ -282,7 +285,7 @@ export function createStore<
           continue;
         case "downloadable":
           if (hasUserActivation()) {
-            kickoff();
+            beginDownload();
             continue;
           }
           // No gesture: the model may have finished downloading — or still
@@ -296,24 +299,24 @@ export function createStore<
           reprobed = true;
           transition({
             kind: "checking",
-            probe: checkAvailability(abortController.signal),
+            probe: runProbe(abortController.signal),
           });
           continue;
         case "checking":
           await awaitTask(current.probe, callerSignal);
           // A settled probe always transitions out of "checking", so this is
           // unreachable today — kept so a future settle path that forgets to
-          // transition fails through kickoff() without a gesture instead of
-          // spinning (runProvision() re-parks on MissingUserActivationError).
+          // transition fails through beginDownload() without a gesture instead
+          // of spinning (runProvision() re-parks on MissingUserActivationError).
           if (state.kind === "checking") {
-            kickoff();
+            beginDownload();
           }
           continue;
       }
     }
   }
 
-  function kickoff(): void {
+  function beginDownload(): void {
     // No activation gate here — provisionInstance() is the single gate for
     // the whole library. Callers that already confirmed a gesture (the
     // "downloadable" case above) pass straight through; a caller that
@@ -321,7 +324,7 @@ export function createStore<
     // re-parks at "downloadable" rather than erroring out.
     void provision(
       abortController.signal,
-      { showDownloadUI: true },
+      { reportDownloading: true },
       "downloadable",
     );
   }
@@ -342,7 +345,7 @@ export function createStore<
     }
     transition({
       kind: "checking",
-      probe: checkAvailability(abortController.signal),
+      probe: runProbe(abortController.signal),
     });
   }
 

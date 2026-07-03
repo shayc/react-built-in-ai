@@ -1,12 +1,12 @@
 import { describe, expect, test, vi } from "vitest";
 import { renderHook } from "vitest-browser-react";
-import { makeAIFake } from "../internal/testing/ai-namespace-fake";
+import { buildAIFake } from "../internal/testing/ai-namespace-fake";
 import { buildRewriterInstance } from "../internal/testing/instance-fakes";
 import { useRewriter } from "./use-rewriter";
 
 describe("useRewriter", () => {
   test("exposes the instance's inputQuota once ready", async () => {
-    const { Fake } = makeAIFake({ buildInstance: buildRewriterInstance });
+    const { Fake } = buildAIFake({ buildInstance: buildRewriterInstance });
     vi.stubGlobal("Rewriter", Fake);
 
     const { result } = await renderHook(() =>
@@ -18,7 +18,7 @@ describe("useRewriter", () => {
   });
 
   test("rewrite() forwards input and context, resolving with the instance's result", async () => {
-    const { Fake } = makeAIFake({ buildInstance: buildRewriterInstance });
+    const { Fake } = buildAIFake({ buildInstance: buildRewriterInstance });
     vi.stubGlobal("Rewriter", Fake);
 
     const { result } = await renderHook(() => useRewriter());
@@ -30,7 +30,7 @@ describe("useRewriter", () => {
   });
 
   test("rewriteStream() yields the instance's chunks", async () => {
-    const { Fake } = makeAIFake({ buildInstance: buildRewriterInstance });
+    const { Fake } = buildAIFake({ buildInstance: buildRewriterInstance });
     vi.stubGlobal("Rewriter", Fake);
 
     const { result } = await renderHook(() => useRewriter());
@@ -44,7 +44,7 @@ describe("useRewriter", () => {
   });
 
   test("measureInput() forwards input and context to the instance", async () => {
-    const { Fake, instances } = makeAIFake({
+    const { Fake, instances } = buildAIFake({
       buildInstance: buildRewriterInstance,
     });
     vi.stubGlobal("Rewriter", Fake);
