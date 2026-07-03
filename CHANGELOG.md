@@ -1,5 +1,25 @@
 # @shayc/react-built-in-ai
 
+## 0.9.0
+
+### Minor Changes
+
+- 2f39bf5: Add `checkAvailability(name, options?)` — a lightweight readiness probe that returns the browser's own `availability()` result (`"available" | "downloadable" | "downloading" | "unavailable"`) without mounting a hook or creating an instance. Useful for a capability list or settings screen that needs a real status for options the user hasn't committed to yet. Throws `UnsupportedError` when the namespace global is absent.
+- 208801d: Actions and `prepare()` now recover from a parked `downloadable` state without a user gesture once the model is already on-device elsewhere (another component, another tab) — previously they'd throw `MissingUserActivationError` even though no download was actually needed anymore.
+
+  - A gesture-less call from `downloadable` re-probes availability once; if the model turns out to already be available, it provisions quietly and reaches `ready`. If it's still genuinely downloadable, the call throws `MissingUserActivationError` as before (bounded to one extra probe — no spinning).
+  - Mid-flight lifecycle resets (a `prepare()` retry, or a same-key restart racing an in-progress `acquire()`) now reject with a `DOMException` named `AbortError` instead of `NotReadyError`, since the request was cancelled rather than failed — filter it the same way you'd filter any other abort (`error.name === "AbortError"`).
+  - `NotReadyError`'s message is corrected to describe its narrowed remaining meaning: a prior `create()` rejected; inspect `.cause` for the underlying rejection.
+
+- 208801d: - `progress` is now `number | null` instead of always `number` — `null` when no download is in flight, `0..1` while downloading. Previously it was `0` both before a download started and while idle, indistinguishable from "just started." Consumers computing `progress * 100` will get a type error pointing at exactly the spot that needs a `?? 0` or a `progress === null` check.
+  - The `"idle"` status is renamed to `"checking"`. It always meant "probing availability, or quietly creating an already-downloaded model" — the old name read as "nothing happening," which it isn't. Exhaustive `switch` statements over `Status` (including the `satisfies never` pattern) will get a compile error at every site that needs updating.
+  - Dropped `engines` from the published `package.json`; the Node version requirement is enforced in CI, not at install time.
+- 208801d: Hooks with equal options — same namespace, same options by value — now share one underlying model instance and one `status`/`progress`/`error`, instead of each hook call creating its own private instance. The instance is created on the first mount that needs it and torn down when the last component using those options unmounts; a `prepare()` retry from `error` restarts the shared instance for every component using it, not just the caller. See the new "Instance sharing" section in the README.
+
+  Also: `{ foo: undefined }` and omitting `foo` are now treated as the same options for sharing/re-render purposes (option-key comparison drops undefined-valued properties, matching `JSON.stringify`).
+
+  **Note for test suites**: if your tests assert per-hook `create()` call counts, components sharing equal options will now produce fewer `create()` calls than before — update the counts, not the behavior.
+
 ## 0.8.1
 
 ### Patch Changes
