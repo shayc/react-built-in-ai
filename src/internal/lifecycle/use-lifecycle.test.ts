@@ -9,7 +9,7 @@ import {
   vi,
   type Mock,
 } from "vitest";
-import { renderHook } from "vitest-browser-react";
+import { render, renderHook } from "vitest-browser-react";
 import {
   BuiltInAIError,
   MissingUserActivationError,
@@ -76,7 +76,7 @@ describe("useLifecycle", () => {
     expect(result.current.inputQuota).toBe(0);
   });
 
-  test("transitions idle → ready when availability is 'available'", async () => {
+  test("transitions checking → ready when availability is 'available'", async () => {
     const { Fake, create } = makeAIFake({
       status: "available",
       buildInstance: () => buildInstance({ marker: "primary" }),
@@ -967,11 +967,63 @@ describe("useLifecycle", () => {
       expect(availability.mock.calls.length).toBe(callsAtPark + 1);
     });
 
-    test("two concurrent gesture-less actions on a parked-then-available store share a single create() call", async () => {
+    test("acquire() rejects with the caller's abort reason when aborted during the gesture-less re-probe", async () => {
+      let resolveReprobe!: (value: "downloadable") => void;
       let calls = 0;
-      const availability = vi.fn(() =>
-        Promise.resolve(calls++ === 0 ? "downloadable" : "available"),
+      const availability = vi.fn(() => {
+        calls++;
+        if (calls === 1) {
+          return Promise.resolve("downloadable" as const);
+        }
+        return new Promise<"downloadable">((resolve) => {
+          resolveReprobe = resolve;
+        });
+      });
+      const create = vi.fn();
+      vi.stubGlobal(NAMESPACE, { availability, create });
+
+      const { result } = await renderHook(() =>
+        useLifecycle<TestOptions, TestInstance>(NAMESPACE, undefined),
       );
+      await vi.waitFor(() =>
+        expect(result.current.status).toBe("downloadable"),
+      );
+
+      // No setUserActivation(true) — default from beforeEach is false, so
+      // acquire() drives the gesture-less re-probe (→ "checking") instead of
+      // kickoff(). Calling acquire() synchronously runs ensureReady() up to
+      // its first await, which lands inside that re-probe's
+      // availability() call — so by the time acquire() returns, the second
+      // call has already happened and can be aborted immediately.
+      const controller = new AbortController();
+      const reason = new DOMException("caller bailed", "AbortError");
+      const pending = result.current.acquire(controller.signal);
+      expect(availability).toHaveBeenCalledTimes(2);
+      controller.abort(reason);
+
+      await expect(pending).rejects.toBe(reason);
+      expect(create).not.toHaveBeenCalled();
+
+      // Let the stalled re-probe settle so it doesn't leak past the test.
+      resolveReprobe("downloadable");
+    });
+
+    test("two concurrent gesture-less actions on a parked-then-available store share a single create() call", async () => {
+      let resolveReprobe!: (value: "available") => void;
+      let calls = 0;
+      const availability = vi.fn(() => {
+        if (calls++ === 0) {
+          return Promise.resolve("downloadable" as const);
+        }
+        // Held open across both concurrent acquire() calls so they race
+        // through the state-read-then-transition() window this test is
+        // meant to catch — resolving synchronously would let a regression
+        // (an await creeping in before the "checking" transition) slip both
+        // callers past the single-flight check undetected.
+        return new Promise<"available">((resolve) => {
+          resolveReprobe = resolve;
+        });
+      });
       const instance = buildInstance({ marker: "shared" });
       const create = vi.fn(() => Promise.resolve(instance));
       vi.stubGlobal(NAMESPACE, { availability, create });
@@ -983,10 +1035,14 @@ describe("useLifecycle", () => {
         expect(result.current.status).toBe("downloadable"),
       );
 
-      const [a, b] = await Promise.all([
+      const pending = Promise.all([
         result.current.acquire(),
         result.current.acquire(),
       ]);
+      await vi.waitFor(() => expect(availability).toHaveBeenCalledTimes(2));
+      resolveReprobe("available");
+
+      const [a, b] = await pending;
 
       expect(a.instance).toBe(instance);
       expect(b.instance).toBe(instance);
@@ -1104,6 +1160,59 @@ describe("useLifecycle", () => {
       expect(__sizeForTests()).toBe(1);
     });
 
+    test("a same-key remount that swaps in during the last holder's unmount commit converges on one entry with a fresh instance", async () => {
+      // Genuinely interleaved, not sequential: unlike the test above (which
+      // fully awaits the unmount before mounting the replacement), this
+      // swaps from a component retaining the key to a *different* component
+      // retaining the same key within a single re-render — so the outgoing
+      // holder's release() and the incoming holder's retain() run in the
+      // same passive-effects flush, the actual shape of D2's "last holder
+      // unmounts while a new component is mid-mount" race. (Driving this via
+      // two separately-awaited renderHook/unmount calls instead doesn't
+      // work: vitest-browser-react's act() explicitly doesn't support
+      // overlapping calls, and forcing it corrupts state for later tests.)
+      const first = buildInstance({ marker: "one" });
+      const second = buildInstance({ marker: "two" });
+      const queue: TestInstance[] = [first, second];
+      const { Fake, create } = makeAIFake({
+        status: "available",
+        buildInstance: () => queue.shift()!,
+      });
+      vi.stubGlobal(NAMESPACE, Fake);
+
+      const captured: {
+        a?: ReturnType<typeof useLifecycle<TestOptions, TestInstance>>;
+        b?: ReturnType<typeof useLifecycle<TestOptions, TestInstance>>;
+      } = {};
+
+      function ChildA(): null {
+        captured.a = useLifecycle<TestOptions, TestInstance>(NAMESPACE, {
+          mode: "resurrect-same-commit",
+        });
+        return null;
+      }
+      function ChildB(): null {
+        captured.b = useLifecycle<TestOptions, TestInstance>(NAMESPACE, {
+          mode: "resurrect-same-commit",
+        });
+        return null;
+      }
+      function Wrapper({ phase }: { phase: "a" | "b" }) {
+        return phase === "a" ? createElement(ChildA) : createElement(ChildB);
+      }
+
+      const { rerender } = await render(createElement(Wrapper, { phase: "a" }));
+      await vi.waitFor(() => expect(captured.a?.status).toBe("ready"));
+
+      await rerender(createElement(Wrapper, { phase: "b" }));
+      await vi.waitFor(() => expect(captured.b?.status).toBe("ready"));
+
+      expect(__sizeForTests()).toBe(1);
+      expect(create).toHaveBeenCalledTimes(2);
+      expect(first.destroy).toHaveBeenCalledTimes(1);
+      expect(second.destroy).not.toHaveBeenCalled();
+    });
+
     test("two hook calls with the same options in one component converge without a render loop", async () => {
       const { Fake, create, instances } = makeAIFake({
         status: "available",
@@ -1129,6 +1238,59 @@ describe("useLifecycle", () => {
       expect(create).toHaveBeenCalledTimes(1);
       expect(instances).toHaveLength(1);
       expect(renders).toBeLessThan(20);
+    });
+
+    test("adopting a sibling's store leaves storeRef pointing at the live store, not a discarded candidate (regression)", async () => {
+      // Regression for the storeRef adoption race: when a hook's retain
+      // effect discovers a sibling already won the retain for this key, it
+      // adopts the sibling's store via setStore(live). A previous bug wrote
+      // `storeRef.current = store` in a *separate*, dep-less effect that ran
+      // right after — closing over `store` while it was still the
+      // pre-adoption candidate (the state update from setStore hadn't
+      // committed yet). A fire-and-forget prepare()/acquire() issued in that
+      // window would hit the never-started candidate and reject with a
+      // spurious NotReadyError/TypeError instead of reaching the shared
+      // store. The window is a same-commit timing artifact: this test
+      // harness's act() fully flushes pending re-renders before `renderHook`
+      // resolves, so the exact window can't be forced open from outside —
+      // this instead asserts the invariant structurally (calling
+      // acquire() on both hooks immediately after mount, across StrictMode
+      // on/off) rather than reproducing the race itself.
+      const { Fake } = makeAIFake({
+        status: "available",
+        buildInstance: () => buildInstance(),
+      });
+      vi.stubGlobal(NAMESPACE, Fake);
+
+      for (const wrapper of [undefined, StrictMode]) {
+        __resetForTests();
+        const { result } = await renderHook(
+          () => {
+            const a = useLifecycle<TestOptions, TestInstance>(NAMESPACE, {
+              mode: "adopt-race",
+            });
+            const b = useLifecycle<TestOptions, TestInstance>(NAMESPACE, {
+              mode: "adopt-race",
+            });
+            return { a, b };
+          },
+          wrapper ? { wrapper } : {},
+        );
+
+        // Fired immediately after mount settles — the earliest point from
+        // which the (would-be) adoption-race window could be observed —
+        // rather than after an extra `waitFor` lets a reconciliation
+        // re-render flush first.
+        const [acquiredA, acquiredB] = await Promise.all([
+          result.current.a.acquire(),
+          result.current.b.acquire(),
+        ]);
+
+        expect(acquiredA.instance).toBeDefined();
+        expect(acquiredB.instance).toBeDefined();
+        expect(result.current.a.status).toBe("ready");
+        expect(result.current.b.status).toBe("ready");
+      }
     });
 
     test("rapid sequential options changes never leave more than the committed key retained", async () => {

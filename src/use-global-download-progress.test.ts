@@ -293,6 +293,64 @@ describe("useGlobalDownloadProgress", () => {
     await vi.waitFor(() => expect(result.current).toBeNull());
   });
 
+  test("cancelling one of two identical-options creator downloads via AbortSignal does not blank the other's still-reported progress", async () => {
+    // Same regression as above, but exercising the abort path instead of the
+    // happy path: cancelling the first call must still run provisionStandalone's
+    // `finally` cleanup (clearing only its own token), not leave a stale
+    // entry behind or blank the second download's still-live progress.
+    const { result } = await renderHook(() =>
+      useGlobalDownloadProgress("LanguageDetector"),
+    );
+
+    const calls: DownloadCall[] = [];
+    const create = vi.fn(
+      (opts?: {
+        monitor?: (m: CreateMonitor) => void;
+        signal?: AbortSignal;
+      }) => {
+        const monitor = new EventTarget() as CreateMonitor;
+        return new Promise<TestInstance>((resolve, reject) => {
+          calls.push({ monitor, resolve });
+          opts?.monitor?.(monitor);
+          opts?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("cancelled", "AbortError"));
+          });
+        });
+      },
+    );
+    vi.stubGlobal("LanguageDetector", {
+      availability: vi.fn(() => Promise.resolve("downloadable")),
+      create,
+    });
+
+    setUserActivation(true);
+    const controller = new AbortController();
+    const first = provisionStandalone<TestOptions, TestInstance>(
+      "LanguageDetector",
+      {},
+      controller.signal,
+    ).catch(() => undefined);
+    await vi.waitFor(() => expect(calls[0]).toBeDefined());
+    const second = provisionStandalone<TestOptions, TestInstance>(
+      "LanguageDetector",
+      {},
+    );
+    await vi.waitFor(() => expect(calls[1]).toBeDefined());
+    setUserActivation(false);
+
+    emit(calls[0].monitor, 0.9);
+    emit(calls[1].monitor, 0.2);
+    await vi.waitFor(() => expect(result.current).toBe(0.2));
+
+    controller.abort(new DOMException("cancelled", "AbortError"));
+    await first;
+    await vi.waitFor(() => expect(result.current).toBe(0.2));
+
+    calls[1].resolve({ destroy: vi.fn() });
+    await second;
+    await vi.waitFor(() => expect(result.current).toBeNull());
+  });
+
   test("server-renders as null even while a download is in flight", async () => {
     const download = await startHookDownload("Translator", undefined);
     emit(download.monitor, 0.5);

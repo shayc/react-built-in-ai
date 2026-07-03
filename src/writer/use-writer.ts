@@ -5,8 +5,9 @@ import type { BaseHookReturn } from "../types";
 
 /**
  * Options for {@link useWriter}. Mirrors `Writer.create()` minus the
- * hook-managed `signal` and `monitor`. Compared shallowly, with array values
- * compared element-wise — inline option literals are safe.
+ * hook-managed `signal` and `monitor`. Compared structurally (sorted-key
+ * identity, not reference) — inline option literals, including array-valued
+ * options, are safe without memoization.
  *
  * @see https://developer.chrome.com/docs/ai/writer-api
  */

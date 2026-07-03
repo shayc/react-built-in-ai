@@ -45,8 +45,17 @@ export function useLifecycle<
     );
   }
 
+  // Kept current inside the retain effect below (not via a separate
+  // per-render effect) so `stable.prepare`/`stable.acquire` — captured once,
+  // see below — always dispatch to whichever store actually won the retain
+  // race, never a discarded candidate. A second, dep-less effect writing
+  // `storeRef.current = store` here would close over the pre-adoption
+  // `store` until the `setStore(live)` re-render commits, letting an
+  // in-between `prepare`/`acquire` call reach the never-started candidate.
+  const storeRef = useRef(store);
   useEffect(() => {
     const live = retain<Options, Model>(key, store);
+    storeRef.current = live;
     if (live !== store) {
       // A sibling using the same options already won the retain race for
       // this key (see registry.ts's `retain`) — adopt its store instead of
@@ -65,14 +74,6 @@ export function useLifecycle<
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
-  // Kept current via an effect (not during render) so `stable.prepare`/
-  // `stable.acquire` — captured once, see below — always dispatch to
-  // whichever store is currently live, without a render-phase ref mutation.
-  const storeRef = useRef(store);
-  useEffect(() => {
-    storeRef.current = store;
-  });
-
   const [stable] = useState(() => ({
     prepare: (): Promise<void> => storeRef.current.prepare(),
     acquire: (callerSignal?: AbortSignal) =>
@@ -80,8 +81,14 @@ export function useLifecycle<
   }));
 
   // getSnapshot doubles as the server snapshot: a store can't leave
-  // "checking" until its retaining effect runs, so server render and
-  // hydration agree.
+  // "checking" until its retaining effect runs, so a component hydrating in
+  // isolation always agrees with its own server render. Under
+  // streaming/selective hydration this can still mismatch across
+  // boundaries: a same-key sibling that hydrated earlier may have already
+  // retained and advanced the shared store to "ready" by the time this
+  // boundary hydrates, so the client snapshot here can read "ready" against
+  // a server-rendered "checking". React patches this up as an ordinary
+  // hydration mismatch; it isn't a bug.
   const snapshot = useSyncExternalStore(
     store.subscribe,
     store.getSnapshot,

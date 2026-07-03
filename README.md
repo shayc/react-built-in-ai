@@ -183,11 +183,11 @@ function GlobalDownloadBar() {
 
 ## Option changes
 
-| Behavior          | Detail                                                                                                  |
-| ----------------- | ------------------------------------------------------------------------------------------------------- |
-| Equality          | Shallow per-key, `Object.is`                                                                            |
-| Stable references | Memoize array-valued options (e.g. `expectedInputLanguages`) to avoid spurious re-creation              |
-| On change         | Destroys the current instance, aborts in-flight work with `AbortError`, and re-enters the state machine |
+| Behavior  | Detail                                                                                                                                                                                                                                                                    |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Equality  | Structural: options are sorted and compared by content, not by reference. Inline object/array literals are safe without memoization — a fresh literal with the same content resolves to the same underlying instance                                                      |
+| Sharing   | Components with equal options share one underlying model instance and one lifecycle — an option change only affects components still on the old options                                                                                                                   |
+| On change | Re-enters the state machine for this component. If this was the last component holding the old options, that instance is destroyed and its in-flight work aborted with `AbortError`; if another component still holds the old options, that instance keeps running for it |
 
 ## Errors
 
@@ -200,9 +200,11 @@ Lifecycle gating throws `BuiltInAIError` subclasses. Action methods (`translate`
 | `MissingUserActivationError` | A download was needed without a user gesture. Trigger `prepare()` (or the first action) from a click/keypress handler.        |
 | `NotReadyError`              | A prior `create()` failed. Call `prepare()` from a user activation to retry; inspect `error.cause` for the underlying reason. |
 
+Components with equal options share one lifecycle: if another component sharing your options calls `prepare()` to retry from `"error"`, that restarts the shared store — any of your own in-flight `acquire()`-backed calls reject with a `DOMException` named `AbortError`. Filter it like any other cancellation (`error.name === "AbortError"`), not as a failure.
+
 ## Cancellation
 
-A per-call `signal` cancels the _caller's_ wait and the underlying action call, but does not tear down the shared model instance. If the hook is mid-download, aborting one call rejects that call with `AbortError` while the download keeps running for any other caller (and for the next call from the same component). **The download is only cancelled when the component unmounts or its options change.**
+A per-call `signal` cancels the _caller's_ wait and the underlying action call, but does not tear down the shared model instance. If the hook is mid-download, aborting one call rejects that call with `AbortError` while the download keeps running for any other caller (and for the next call from the same component). **The download is only cancelled when the last component sharing it unmounts (or changes options such that it's no longer the last holder).** A sibling component's `prepare()` retry can also abort your in-flight call — see Errors above.
 
 ## Security
 

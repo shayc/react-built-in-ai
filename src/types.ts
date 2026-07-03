@@ -35,14 +35,20 @@ export interface BaseHookReturn {
    * Hooks with equal options share one underlying instance (see the
    * "Instance sharing" section of the README) — `prepare()` restarts that
    * shared instance, so a retry from one component is visible to every
-   * component sharing it, not just the caller.
+   * component sharing it, not just the caller. That restart also aborts any
+   * other sharing component's in-flight action call or `prepare()`/gate
+   * resolution — those reject with a `DOMException` named `AbortError`,
+   * which should be filtered like any other cancellation
+   * (`error.name === "AbortError"`), not treated as a failure.
    *
    * Since `status` already reflects everything user-facing, a fire-and-forget
    * `prepare().catch(() => {})` from a gesture handler is a reasonable way to
    * pre-warm without surfacing a redundant rejection.
    *
    * @throws A {@link BuiltInAIError} subclass — `UnsupportedError`,
-   * `UnavailableError`, `MissingUserActivationError`, or `NotReadyError`.
+   * `UnavailableError`, `MissingUserActivationError`, or `NotReadyError`. Can
+   * also reject with a `DOMException` named `AbortError` when a sibling
+   * component sharing this store restarts it mid-flight (see above).
    */
   prepare: () => Promise<void>;
 }
