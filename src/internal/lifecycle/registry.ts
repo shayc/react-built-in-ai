@@ -168,14 +168,11 @@ function matchesPrefix(key: string, prefixes: readonly string[]): boolean {
 }
 
 /**
- * Lowest progress among matching in-flight downloads — the one with the
- * longest to go — across both retained stores and external creator calls,
- * or `null` when none are in flight. Min-aggregation means the reported
- * value only ever rises as downloads complete, so the aggregate never snaps
- * backwards. A download in flight with no progress signal yet contributes
- * `0` — the honest floor — rather than dropping out of the aggregate, which
- * would otherwise make a download vanish from consumer UIs while it's
- * genuinely running.
+ * Lowest progress among matching in-flight downloads — across both retained
+ * stores and external creator calls — or `null` when none are in flight. A
+ * download with no progress signal yet contributes `0` rather than dropping
+ * out of the aggregate; `useGlobalDownloadProgress` documents the
+ * consumer-facing rationale for min-aggregation and the `0` floor.
  *
  * @internal
  */

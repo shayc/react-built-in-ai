@@ -9,9 +9,9 @@ import { createStore } from "./store";
  * registry keyed by (namespace, options) identity; the last unmount tears it
  * down. `prepare`/`acquire` stay referentially stable for the component's
  * whole lifetime (including across an options change, which swaps the
- * underlying store) — the per-API hooks memoize their action methods in a
- * `useState` initializer that only runs once, so it closes over whatever
- * `acquire`/`prepare` it's handed on the first render forever.
+ * underlying store) — the per-API hooks capture them once in a `useState`
+ * initializer and never again, so an unstable reference would go stale
+ * after the first render.
  *
  * @internal
  */

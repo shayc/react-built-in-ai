@@ -57,6 +57,7 @@ export interface RewriterHookReturn extends BaseHookReturn {
  * @example
  * ```tsx
  * function PoliteRephrase({ draft }: { draft: string }) {
+ *   const [output, setOutput] = useState("");
  *   const rewriter = useRewriter({ tone: "more-formal" });
  *   return (
  *     <button

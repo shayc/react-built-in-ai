@@ -60,6 +60,7 @@ export interface SummarizerHookReturn extends BaseHookReturn {
  * @example
  * ```tsx
  * function Summary({ article }: { article: string }) {
+ *   const [output, setOutput] = useState("");
  *   const summarizer = useSummarizer({ type: "key-points", length: "short" });
  *   return (
  *     <button

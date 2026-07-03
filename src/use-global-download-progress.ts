@@ -26,8 +26,7 @@ import type { BuiltInAIName } from "./is-supported";
  * Omit (or pass `undefined`) to aggregate across every built-in AI download
  * currently in flight.
  * @returns Progress in `[0, 1]` while a download is in flight; `null` when
- * nothing is downloading. `null` (not `0`) lets callers tell "no download"
- * apart from "download just started at 0%".
+ * nothing is downloading.
  *
  * @example
  * ```tsx

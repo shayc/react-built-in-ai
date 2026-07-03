@@ -56,6 +56,7 @@ export interface LanguageDetectorHookReturn extends BaseHookReturn {
  * @example
  * ```tsx
  * function Detect({ text }: { text: string }) {
+ *   const [language, setLanguage] = useState<string>();
  *   const detector = useLanguageDetector();
  *   return (
  *     <button
