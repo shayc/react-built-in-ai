@@ -1,5 +1,5 @@
 import type { BuiltInAIName } from "../../is-supported";
-import { createStore } from "./store";
+import type { createStore } from "./store";
 
 /** @internal */
 export type Store<

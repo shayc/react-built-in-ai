@@ -61,9 +61,10 @@ export function useLifecycle<
       // this key (see registry.ts's `retain`) — adopt its store instead of
       // the (never-started, now-discarded) candidate. This is a legitimate
       // "synchronize with an external system" setState (the registry is the
-      // external system; render can't consult it — see D2 in
-      // PLAN-store-registry.md), not the props-mirroring pattern the
-      // set-state-in-effect rule warns about.
+      // external system; render's `lookup()` is only an optimistic read that
+      // a concurrent render or interleaved release can invalidate, so the
+      // effect must reconcile — see D2 in PLAN-store-registry.md), not the
+      // props-mirroring pattern the set-state-in-effect rule warns about.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setStore(live);
     }
