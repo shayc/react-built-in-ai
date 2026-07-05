@@ -48,7 +48,7 @@
     "typecheck": "tsc",
     "prepublishOnly": "npm run build",
     "changeset": "changeset",
-    "version": "changeset version",
+    "version": "changeset version && npm install --package-lock-only",
     "release": "changeset publish"
   },
   "dependencies": {
