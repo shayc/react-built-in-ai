@@ -1,10 +1,6 @@
 import { provisionStandalone } from "../internal/lifecycle/provision";
 import type { ProofreaderOptions } from "./use-proofreader";
 
-/**
- * Options for {@link createProofreader}. Mirrors {@link ProofreaderOptions} plus
- * an optional cancellation signal.
- */
 export interface CreateProofreaderOptions extends ProofreaderOptions {
   /** Cancels both the (optional) download and `Proofreader.create()` call. */
   signal?: AbortSignal;

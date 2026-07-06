@@ -1,10 +1,6 @@
 import { provisionStandalone } from "../internal/lifecycle/provision";
 import type { LanguageDetectorOptions } from "./use-language-detector";
 
-/**
- * Options for {@link createLanguageDetector}. Mirrors
- * {@link LanguageDetectorOptions} plus an optional cancellation signal.
- */
 export interface CreateLanguageDetectorOptions extends LanguageDetectorOptions {
   /** Cancels both the (optional) download and `LanguageDetector.create()` call. */
   signal?: AbortSignal;

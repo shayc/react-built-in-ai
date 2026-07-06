@@ -1,10 +1,6 @@
 import { provisionStandalone } from "../internal/lifecycle/provision";
 import type { TranslatorOptions } from "./use-translator";
 
-/**
- * Options for {@link createTranslator}. Mirrors {@link TranslatorOptions} plus
- * an optional cancellation signal.
- */
 export interface CreateTranslatorOptions extends TranslatorOptions {
   /** Cancels both the (optional) download and `Translator.create()` call. */
   signal?: AbortSignal;

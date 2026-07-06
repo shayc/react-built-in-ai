@@ -1,10 +1,6 @@
 import { provisionStandalone } from "../internal/lifecycle/provision";
 import type { LanguageModelOptions } from "./use-language-model";
 
-/**
- * Options for {@link createLanguageModel}. Mirrors {@link LanguageModelOptions}
- * plus an optional cancellation signal.
- */
 export interface CreateLanguageModelOptions extends LanguageModelOptions {
   /** Cancels both the (optional) download and `LanguageModel.create()` call. */
   signal?: AbortSignal;

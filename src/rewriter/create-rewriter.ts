@@ -1,10 +1,6 @@
 import { provisionStandalone } from "../internal/lifecycle/provision";
 import type { RewriterOptions } from "./use-rewriter";
 
-/**
- * Options for {@link createRewriter}. Mirrors {@link RewriterOptions} plus an
- * optional cancellation signal.
- */
 export interface CreateRewriterOptions extends RewriterOptions {
   /** Cancels both the (optional) download and `Rewriter.create()` call. */
   signal?: AbortSignal;

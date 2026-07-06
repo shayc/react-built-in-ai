@@ -351,9 +351,7 @@ describe("useLifecycle", () => {
     // aggregate *before* the deletion could be announced, so a subscriber
     // (useGlobalDownloadProgress) never learned the entry vanished and would
     // stay frozen at the last-seen progress instead of returning to null.
-    const create = vi.fn(
-      () => new Promise<TestInstance>(() => undefined), // never resolves
-    );
+    const create = vi.fn(() => new Promise<TestInstance>(() => undefined));
     vi.stubGlobal(NAMESPACE, {
       availability: vi.fn(() => Promise.resolve("downloadable")),
       create,
