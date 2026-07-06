@@ -79,7 +79,7 @@ if (!isSupported("Translator")) return <Fallback />;
 
 ### Checking availability without a hook
 
-`checkAvailability(name, options?)` runs the same on-device readiness probe every hook and creator uses internally, without mounting a hook or creating an instance — useful for a capability list or settings screen that needs a real status for options the user hasn't committed to yet:
+`checkAvailability(name, options)` runs the same on-device readiness probe every hook and creator uses internally, without mounting a hook or creating an instance — useful for a capability list or settings screen that needs a real status for options the user hasn't committed to yet. Options are optional for every API except `"Translator"`, which needs a language pair to answer meaningfully:
 
 ```tsx
 import { checkAvailability } from "@shayc/react-built-in-ai";

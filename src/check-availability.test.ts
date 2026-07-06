@@ -3,11 +3,16 @@ import { checkAvailability } from "./check-availability";
 import { UnsupportedError } from "./errors";
 import type { BuiltInAIName } from "./is-supported";
 
+// Shape shared by every non-Translator `*CreateCoreOptions` interface, so it
+// stays assignable regardless of which real API `NAMESPACE` stands in for.
 interface TestOptions {
-  mode?: string;
+  outputLanguage?: string;
 }
 
-const NAMESPACE = "__CheckAvailabilityTestAI" as BuiltInAIName;
+const NAMESPACE = "__CheckAvailabilityTestAI" as Exclude<
+  BuiltInAIName,
+  "Translator"
+>;
 
 describe("checkAvailability", () => {
   test("throws UnsupportedError when the global namespace is absent", async () => {
@@ -38,7 +43,7 @@ describe("checkAvailability", () => {
     const availability = vi.fn(() => Promise.resolve("available" as const));
     vi.stubGlobal(NAMESPACE, { availability, create: vi.fn() });
 
-    const options: TestOptions = { mode: "a" };
+    const options: TestOptions = { outputLanguage: "en" };
     await checkAvailability(NAMESPACE, options);
 
     expect(availability).toHaveBeenCalledWith(options);
@@ -69,5 +74,40 @@ describe("checkAvailability", () => {
     });
 
     await expect(checkAvailability(NAMESPACE)).rejects.toBe(original);
+  });
+
+  test("types the options argument per-name (compile-time)", () => {
+    // These arrows are never executed; tsc type-checks the calls statically.
+
+    // Translator's options are required — no create() has an unconditional
+    // "does this exist" answer, but Translator's availability() genuinely
+    // needs a language pair to give one.
+    // @ts-expect-error - Translator requires options
+    void (() => checkAvailability("Translator"));
+
+    // Cross-API options fail: Writer's shape doesn't satisfy Translator's.
+    // @ts-expect-error - Writer options aren't assignable to Translator's
+    void (() => checkAvailability("Translator", { tone: "more-formal" }));
+
+    // create()-only members (e.g. sharedContext) aren't consumed by
+    // availability(), so they're rejected here even though create() accepts
+    // them.
+    // @ts-expect-error - sharedContext is a create()-only option
+    void (() => checkAvailability("Writer", { sharedContext: "context" }));
+
+    void (() =>
+      checkAvailability("Translator", {
+        sourceLanguage: "en",
+        targetLanguage: "es",
+      }));
+    void (() => checkAvailability("Summarizer"));
+    void (() => checkAvailability("Summarizer", { type: "tldr" }));
+
+    // An unnarrowed BuiltInAIName no longer type-checks option-free, since
+    // that name could be "Translator" — the caller must narrow first.
+    void ((name: BuiltInAIName) => {
+      // @ts-expect-error - name isn't narrowed away from "Translator"
+      checkAvailability(name);
+    });
   });
 });
