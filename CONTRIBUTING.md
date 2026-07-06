@@ -34,4 +34,4 @@ Pure refactors, docs-only changes, and CI tweaks don't need a changeset.
 
 ## Reporting issues
 
-Open an issue at [github.com/shayc/react-built-in-ai/issues](https://github.com/shayc/react-built-in-ai/issues). Include the browser, Chrome version, the Built-in AI API you're using (Translator / Rewriter / Proofreader / Summarizer / Writer / Language Detector), and a minimal reproduction if possible.
+Open an issue at [github.com/shayc/react-built-in-ai/issues](https://github.com/shayc/react-built-in-ai/issues). Include the browser, Chrome version, the Built-in AI API you're using (Translator / Rewriter / Proofreader / Summarizer / Writer / Language Detector / Prompt), and a minimal reproduction if possible.
