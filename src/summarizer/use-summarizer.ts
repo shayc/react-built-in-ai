@@ -19,10 +19,6 @@ export type SummarizerOptions = Omit<
 /** Per-call options for {@link useSummarizer} action methods. */
 export type SummarizeCallOptions = SummarizerSummarizeOptions;
 
-/**
- * Return value of {@link useSummarizer}. Extends {@link BaseHookReturn} with the
- * Summarizer action methods.
- */
 export interface SummarizerHookReturn extends BaseHookReturn {
   /**
    * Summarizes `input` and resolves with the full result.

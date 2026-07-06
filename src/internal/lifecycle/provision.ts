@@ -18,13 +18,10 @@ export interface ProvisionInstanceOptions<
   Options extends object,
   Model extends DestroyableModel,
 > {
-  /** Namespace already resolved by the caller. */
   namespace: AINamespace<Options, Model>;
-  /** Browser `create()` options, forwarded verbatim. */
   options: Options | undefined;
   /** `availability()` result the caller already probed. */
   availability: Availability;
-  /** Cancels `create()`. */
   signal?: AbortSignal;
   /** Called on each `downloadprogress` event with `event.loaded` in `[0, 1]`. */
   onProgress?: (progress: number) => void;

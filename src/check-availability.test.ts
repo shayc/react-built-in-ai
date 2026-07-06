@@ -85,7 +85,6 @@ describe("checkAvailability", () => {
     // @ts-expect-error - Translator requires options
     void (() => checkAvailability("Translator"));
 
-    // Cross-API options fail: Writer's shape doesn't satisfy Translator's.
     // @ts-expect-error - Writer options aren't assignable to Translator's
     void (() => checkAvailability("Translator", { tone: "more-formal" }));
 

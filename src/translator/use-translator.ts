@@ -20,10 +20,6 @@ export type TranslatorOptions = Omit<
 /** Per-call options for {@link useTranslator} action methods. */
 export type TranslateCallOptions = TranslatorTranslateOptions;
 
-/**
- * Return value of {@link useTranslator}. Extends {@link BaseHookReturn} with the
- * Translator action methods.
- */
 export interface TranslatorHookReturn extends BaseHookReturn {
   /**
    * Translates `input` and resolves with the full result.

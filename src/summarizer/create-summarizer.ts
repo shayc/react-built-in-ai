@@ -1,10 +1,6 @@
 import { provisionStandalone } from "../internal/lifecycle/provision";
 import type { SummarizerOptions } from "./use-summarizer";
 
-/**
- * Options for {@link createSummarizer}. Mirrors {@link SummarizerOptions} plus
- * an optional cancellation signal.
- */
 export interface CreateSummarizerOptions extends SummarizerOptions {
   /** Cancels both the (optional) download and `Summarizer.create()` call. */
   signal?: AbortSignal;

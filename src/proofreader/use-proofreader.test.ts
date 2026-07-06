@@ -24,8 +24,7 @@ describe("useProofreader", () => {
   });
 
   test("omits inputQuota and measureInput (compile-time)", () => {
-    // This arrow is never executed; tsc type-checks the accesses statically,
-    // verifying inputQuota and measureInput are omitted from the return type.
+    // This arrow is never executed; tsc type-checks the accesses statically.
     void (() => {
       const proofreader = useProofreader();
       // @ts-expect-error - inputQuota is not part of ProofreaderHookReturn

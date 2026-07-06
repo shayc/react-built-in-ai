@@ -16,10 +16,6 @@ export type RewriterOptions = Omit<RewriterCreateOptions, "signal" | "monitor">;
 /** Per-call options for {@link useRewriter} action methods. */
 export type RewriteCallOptions = RewriterRewriteOptions;
 
-/**
- * Return value of {@link useRewriter}. Extends {@link BaseHookReturn} with the
- * Rewriter action methods.
- */
 export interface RewriterHookReturn extends BaseHookReturn {
   /**
    * Rewrites `input` and resolves with the full result.

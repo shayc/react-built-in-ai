@@ -4,9 +4,11 @@
 [![CI](https://github.com/shayc/react-built-in-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/shayc/react-built-in-ai/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/npm/l/@shayc/react-built-in-ai.svg)](LICENSE)
 
-A thin React layer over the browser's [Built-in AI](https://developer.chrome.com/docs/ai/built-in) APIs — models the browser downloads and runs on-device. Six task APIs plus the Prompt API (`LanguageModel`), each with a React hook and an imperative creator, all sharing one lifecycle state machine. TypeScript-first, with option and return types exported for every API.
+A thin React layer over the browser's [Built-in AI](https://developer.chrome.com/docs/ai/built-in) APIs — models the browser downloads and runs on-device, including Gemini Nano (which powers the Prompt and writing APIs). Six task APIs plus the Prompt API (`LanguageModel`), each with a React hook and an imperative creator.
 
-**Browser support** — Chromium only (Chrome 138+, Edge); not Firefox or Safari. The Built-in AI globals are gated by Chrome flags / origin trial and absent on unsupported builds — feature-detect with [`isSupported()`](#capability-check) and render a fallback.
+Used raw, these APIs make you hand-roll availability probes, user-activation-gated downloads, `downloadprogress` wiring, instance cleanup, and deduplication across components. The hooks fold all of that into one lifecycle state machine: read `status` and `progress`, call the task method. TypeScript-first, with option and return types exported for every API; ESM, no runtime dependencies (one type-only package).
+
+**Browser support** — Chromium only (Chrome 138+, Edge); not Firefox or Safari. Some of the globals are still gated by Chrome flags or an origin trial, and all are absent on unsupported builds — feature-detect with [`isSupported()`](#capability-check) and render a fallback.
 
 ## Install
 
@@ -25,6 +27,9 @@ function Translate() {
     targetLanguage: "es",
   });
 
+  // Non-Chromium browser — see Capability check for feature detection.
+  if (translator.status === "unsupported") return <p>Not supported here.</p>;
+
   return (
     <button
       disabled={translator.status === "downloading"}
@@ -38,7 +43,7 @@ function Translate() {
 
 On a fresh browser, the first click triggers the model download (gated by user activation); subsequent clicks call `translate` directly. See [Lifecycle](#lifecycle) for the full state machine.
 
-## Surface
+## API
 
 | Browser API                                                                  | React hook            | Imperative creator       |
 | ---------------------------------------------------------------------------- | --------------------- | ------------------------ |
@@ -83,7 +88,7 @@ if (!isSupported("Translator")) return <Fallback />;
 
 ### Checking availability without a hook
 
-`checkAvailability(name, options)` runs the same on-device readiness probe every hook and creator uses internally, without mounting a hook or creating an instance — useful for a capability list or settings screen that needs a real status for options the user hasn't committed to yet. Options are optional for every API except `"Translator"`, which needs a language pair to answer meaningfully:
+`checkAvailability(name, options)` runs the same on-device readiness probe every hook and creator uses internally, without mounting a hook or creating an instance. Use it for a capability list or settings screen that needs a real status for options the user hasn't committed to yet. Options are optional for every API except `"Translator"`, which needs a language pair to answer meaningfully:
 
 ```tsx
 import { checkAvailability } from "@shayc/react-built-in-ai";
@@ -99,13 +104,22 @@ It throws `UnsupportedError` when the global is absent — check `isSupported()`
 
 ## Lifecycle
 
-Every hook exposes `status`, `progress`, `error`, and `prepare`. `status` is always one of:
+Every hook exposes `status`, `progress`, `error`, and `prepare`. The paths through the state machine:
+
+```text
+checking → ready                                   model already on device
+checking → downloadable → downloading → ready      download needed — starts on a user gesture
+checking | downloading → error                     probe/create rejected — prepare() retries
+unsupported / unavailable                          terminal — no global / device can't run the model
+```
+
+`status` is always one of:
 
 - **`unsupported`** — the global namespace is missing on this browser.
 - **`unavailable`** — the model reports it cannot run on this device.
 - **`checking`** — supported; probing availability, or quietly creating an already-downloaded model. Passes through to `ready` on its own.
-- **`downloadable`** — the model needs a download, which the browser only starts from a **user activation**. Render your download affordance off this state; `prepare()` (or any action method) called from a user gesture moves it along. Mirrors the browser's `availability()` vocabulary. A gesture-less call re-checks once before failing, in case the model finished downloading — or is mid-download, in which case the download is joined — elsewhere (another component, another tab) since this hook last checked.
-- **`downloading`** — a fetch is running, either started by this hook or joined passively (the browser already reported a download in flight when this hook probed — e.g. another hook with different options, another tab, or an imperative `create*` call). `progress` is a number only once the browser has reported a fraction via a `downloadprogress` event; otherwise it's `null` — no starting value is ever fabricated, so a joined download that's already partway done isn't misreported as `0`.
+- **`downloadable`** — the model needs a download, which the browser only starts from a **user activation**. Render your download affordance off this state; `prepare()` (or any action method) called from a user gesture moves it along. (The name mirrors the browser's `availability()` vocabulary.) Edge case: a gesture-less call doesn't fail immediately — it re-checks availability first, in case another component or tab finished the download since this hook last looked, and joins an in-flight download if it finds one.
+- **`downloading`** — a download is running. `progress` is `null` until the browser reports a fraction via a `downloadprogress` event, then a number — no starting value is ever fabricated, so a joined download that's already partway done isn't misreported as `0`. The download may have been started by this hook or joined passively (another hook with different options, another tab, or an imperative `create*` call already had it in flight).
 - **`ready`** — the instance is live; action methods can be called freely.
 - **`error`** — `availability()` or `create()` rejected. Call `prepare()` (from a user activation if a download is required) to tear down and re-initialize.
 
@@ -115,7 +129,13 @@ Hooks with equal options — same namespace, same options by value — share one
 
 `useLanguageModel` is the one exception: each mount owns a private session (conversations must stay isolated, and its options can't be structurally keyed), so equal-options mounts never share an instance. See [Prompt API](#prompt-api).
 
-## Usage
+### Troubleshooting
+
+- **`unsupported` on a current Chrome** — some APIs are still flag- or origin-trial-gated depending on the API and Chrome release (the Prompt API on the web most notably). Check the Chrome doc linked in the [API table](#api) for current status.
+- **`unavailable`** — the device doesn't meet Chrome's hardware or storage requirements for that model (also listed in each API's Chrome doc). Render a fallback; retrying won't help.
+- **Stuck on `downloadable`** — downloads start only from a user gesture. Call `prepare()` or any action method from a click/keypress handler, not from an effect.
+
+## Handling the lifecycle in UI
 
 Action methods are gated by the lifecycle — they throw `UnsupportedError`, `UnavailableError`, `MissingUserActivationError`, or `NotReadyError` when the state forbids them. **A call rejected by the gate never mutates the hook's `status` or `error`.** (A call made from `downloadable` with a user activation is not gate-rejected — it drives `status` through `downloading` to `ready` or `error` like `prepare()`.)
 
@@ -152,7 +172,9 @@ function Demo() {
 }
 ```
 
-Streaming — accumulate chunks into React state to render incrementally:
+### Streaming
+
+Accumulate chunks into React state to render incrementally:
 
 ```tsx
 const [output, setOutput] = useState("");
@@ -182,7 +204,7 @@ try {
 
 Each `create*` mirrors the hook lifecycle exactly — same three typed errors (`UnsupportedError`, `UnavailableError`, `MissingUserActivationError`), same progress wiring. Unlike with the hooks, **other browser rejections surface unchanged** — most commonly `AbortError` when `signal` fires, or `NetworkError` on a failed download. The `instanceof BuiltInAIError` check above is what separates the typed lifecycle errors from those pass-throughs.
 
-The returned instance is `AsyncDisposable` — prefer `await using` so it's released on scope exit. `.destroy()` is also exposed for callers that need to release earlier.
+The returned instance is `AsyncDisposable` — prefer `await using` (TypeScript 5.2+) so it's released on scope exit. On older toolchains, or to release earlier, call `.destroy()` in a `finally`.
 
 Each creator accepts the same options as its hook, plus an optional `signal` that cancels both the download (if any) and the underlying `create()` call.
 
@@ -273,7 +295,7 @@ useEffect(() => {
 
 ### Output variety (`temperature` / `topK`)
 
-Not exposed. On the default web surface the raw `topK` / `temperature` params are origin-trial / extension-gated and silently ignored, and the spec's proposed replacement (`samplingMode` presets) isn't implemented in stable Chrome yet — so neither can honestly be documented as a working knob. `samplingMode` remains accepted in the options type (IDL ignores it until it ships); the type will widen once the surface settles.
+Not exposed. In stable Chrome on the web, the raw `topK` / `temperature` params are silently ignored, and the spec's proposed replacement (`samplingMode` presets) hasn't shipped — neither is a working knob yet. `samplingMode` is still accepted in the options type (the browser ignores it until it ships); the type will widen once the surface settles.
 
 ## Errors
 

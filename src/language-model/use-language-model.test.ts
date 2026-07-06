@@ -94,12 +94,10 @@ describe("useLanguageModel", () => {
     await vi.waitFor(() => expect(a.result.current.status).toBe("ready"));
     await vi.waitFor(() => expect(b.result.current.status).toBe("ready"));
 
-    // Two mounts, equal options ⇒ two create() calls, two instances.
     expect(create).toHaveBeenCalledTimes(2);
     expect(instances).toHaveLength(2);
 
     await a.result.current.prompt("hi");
-    // Prompting one never touches the other.
     expect(instances[0].prompt).toHaveBeenCalledTimes(1);
     expect(instances[1].prompt).not.toHaveBeenCalled();
   });
@@ -183,7 +181,6 @@ describe("useLanguageModel", () => {
     // Resolving with the instance's value proves the call reached it.
     await expect(result.current.measureContext("hi")).resolves.toBe(4);
     expect(instances[0].measureContextUsage).toHaveBeenCalledTimes(1);
-    // Measuring doesn't advance usage.
     expect(result.current.contextUsage).toBe(0);
   });
 
@@ -260,7 +257,6 @@ describe("useLanguageModel", () => {
     await result.current.prompt("hi");
     instances[1].fireOverflow();
     await vi.waitFor(() => expect(result.current.overflowCount).toBe(1));
-    // The old, discarded session's overflow no longer counts.
     instances[0].fireOverflow();
     expect(result.current.overflowCount).toBe(1);
   });

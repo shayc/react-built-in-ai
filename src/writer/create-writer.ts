@@ -1,10 +1,6 @@
 import { provisionStandalone } from "../internal/lifecycle/provision";
 import type { WriterOptions } from "./use-writer";
 
-/**
- * Options for {@link createWriter}. Mirrors {@link WriterOptions} plus an
- * optional cancellation signal.
- */
 export interface CreateWriterOptions extends WriterOptions {
   /** Cancels both the (optional) download and `Writer.create()` call. */
   signal?: AbortSignal;

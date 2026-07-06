@@ -16,10 +16,6 @@ export type WriterOptions = Omit<WriterCreateOptions, "signal" | "monitor">;
 /** Per-call options for {@link useWriter} action methods. */
 export type WriteCallOptions = WriterWriteOptions;
 
-/**
- * Return value of {@link useWriter}. Extends {@link BaseHookReturn} with the
- * Writer action methods.
- */
 export interface WriterHookReturn extends BaseHookReturn {
   /**
    * Writes from `input` and resolves with the full result.

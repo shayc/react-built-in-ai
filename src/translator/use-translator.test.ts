@@ -59,8 +59,7 @@ describe("useTranslator", () => {
   });
 
   test("requires a TranslatorOptions argument (compile-time)", () => {
-    // These arrows are never executed; tsc type-checks the calls statically,
-    // verifying the options argument is required (both missing and undefined are rejected).
+    // These arrows are never executed; tsc type-checks the calls statically.
     // @ts-expect-error - options argument is required
     void (() => useTranslator());
     // @ts-expect-error - options argument is not optional
