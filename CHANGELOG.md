@@ -1,5 +1,19 @@
 # @shayc/react-built-in-ai
 
+## 0.11.0
+
+### Minor Changes
+
+- ae3b224: Add Prompt API (`LanguageModel`) support: the `useLanguageModel` hook and `createLanguageModel` creator, with `LanguageModelOptions`, `PromptCallOptions`, `LanguageModelHookReturn`, and `CreateLanguageModelOptions` types exported. `"LanguageModel"` is now a `BuiltInAIName`, so `isSupported`, `checkAvailability`, and `useGlobalDownloadProgress` cover it too.
+
+  Unlike the six stateless task hooks, `useLanguageModel` owns a private session per mount (conversations stay isolated; equal options never share an instance), captures its options at mount rather than re-keying on every render, and exposes session state: `prompt` / `promptStream` / `append` / `measureContext`, live `contextUsage` and `contextWindow`, an `overflowCount` counter for the session-compacting pattern, and `reset(nextOptions?)` to discard the conversation and provision a fresh session. The model download is still deduplicated by the browser across sessions. The raw `topK` / `temperature` sampling params are omitted from the option type (origin-trial / extension-gated and mid-redesign on the web surface).
+
+  The Prompt API ships on Chrome 148+ (web) — a later floor than the other six APIs' 138+ — or via the official `prompt-api-polyfill`.
+
+- ff76478: `checkAvailability()` is now typed per-API instead of accepting any `object`: options are required for `"Translator"` (matching the platform, which needs a language pair to answer meaningfully) and, for every name, must match that API's real `availability()` shape (its `*CreateCoreOptions`) rather than accepting arbitrary or cross-API option bags. `create()`-only members like `sharedContext` are correctly rejected too, since `availability()` never consumed them.
+
+  This is breaking for types only, and fixes a real bug: `checkAvailability("Translator")` previously compiled but threw a `TypeError` at runtime. Callers iterating `BuiltInAIName` option-free for a capability list should use `isSupported("Translator")` for the existence check, or supply a language pair to probe real availability. The new `AvailabilityOptionsMap` and `BuiltInAIAvailability` types are exported for anyone building a generic wrapper.
+
 ## 0.10.0
 
 ### Minor Changes
