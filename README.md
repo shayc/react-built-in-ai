@@ -16,6 +16,8 @@ Used raw, these APIs make you hand-roll availability probes, user-activation-gat
 npm install @shayc/react-built-in-ai
 ```
 
+Requires React 18 or 19 (peer dependency). Client-only — add `"use client"` in RSC setups (e.g. the Next.js app router).
+
 ## Quick start
 
 ```tsx
@@ -45,17 +47,17 @@ On a fresh browser, the first click triggers the model download (gated by user a
 
 ## API
 
-| Browser API                                                                  | React hook            | Imperative creator       |
-| ---------------------------------------------------------------------------- | --------------------- | ------------------------ |
-| [Translator](https://developer.chrome.com/docs/ai/translator-api)            | `useTranslator`       | `createTranslator`       |
-| [Rewriter](https://developer.chrome.com/docs/ai/rewriter-api)                | `useRewriter`         | `createRewriter`         |
-| [Proofreader](https://developer.chrome.com/docs/ai/proofreader-api)          | `useProofreader`      | `createProofreader`      |
-| [Summarizer](https://developer.chrome.com/docs/ai/summarizer-api)            | `useSummarizer`       | `createSummarizer`       |
-| [Writer](https://developer.chrome.com/docs/ai/writer-api)                    | `useWriter`           | `createWriter`           |
-| [Language Detector](https://developer.chrome.com/docs/ai/language-detection) | `useLanguageDetector` | `createLanguageDetector` |
-| [Prompt](https://developer.chrome.com/docs/ai/prompt-api) ¹                  | `useLanguageModel`    | `createLanguageModel`    |
+| Browser API                                                                  | React hook            | Imperative creator       | Chrome              |
+| ---------------------------------------------------------------------------- | --------------------- | ------------------------ | ------------------- |
+| [Translator](https://developer.chrome.com/docs/ai/translator-api)            | `useTranslator`       | `createTranslator`       | 138+                |
+| [Rewriter](https://developer.chrome.com/docs/ai/rewriter-api)                | `useRewriter`         | `createRewriter`         | 138+                |
+| [Proofreader](https://developer.chrome.com/docs/ai/proofreader-api)          | `useProofreader`      | `createProofreader`      | 138+                |
+| [Summarizer](https://developer.chrome.com/docs/ai/summarizer-api)            | `useSummarizer`       | `createSummarizer`       | 138+                |
+| [Writer](https://developer.chrome.com/docs/ai/writer-api)                    | `useWriter`           | `createWriter`           | 138+                |
+| [Language Detector](https://developer.chrome.com/docs/ai/language-detection) | `useLanguageDetector` | `createLanguageDetector` | 138+                |
+| [Prompt](https://developer.chrome.com/docs/ai/prompt-api) ¹                  | `useLanguageModel`    | `createLanguageModel`    | 148+ (138+ in ext.) |
 
-¹ The Prompt API (`LanguageModel`) ships later than the other six — **Chrome 148+ on the web** (138+ in extensions), or via the official [`prompt-api-polyfill`](https://github.com/webmachinelearning/prompt-api#the-explainer). It's also a different shape (a stateful chat session, not a stateless task); see [Prompt API](#prompt-api) for how `useLanguageModel` diverges from the other hooks.
+¹ Available earlier via the official [`prompt-api-polyfill`](https://github.com/webmachinelearning/prompt-api#the-explainer). It's also a different shape — a stateful chat session, not a stateless task; see [Prompt API](#prompt-api) for how `useLanguageModel` diverges from the other hooks.
 
 **Use the hook** when options are known at render time (e.g. a translator bound to the user's current language pair). **Use the creator** when options are decided mid-flow and a hook can't be driven (queued work, command palettes, one-shot scripts).
 
@@ -64,15 +66,6 @@ Every hook shares the lifecycle surface plus task-specific methods (`translate`,
 - `useProofreader` exposes only `proofread` — the browser API offers no streaming, `measureInput`, or `inputQuota`.
 - `useLanguageDetector` has no streaming variant, and its `detect` resolves with an array of ranked `{ detectedLanguage, confidence }` candidates rather than a string.
 - `useLanguageModel` is a stateful conversation rather than a one-shot task — see [Prompt API](#prompt-api).
-
-## Requirements
-
-| Requirement   | Version                                                                  |
-| ------------- | ------------------------------------------------------------------------ |
-| React         | 18.x or 19.x (peer dependency)                                           |
-| Browser       | Chromium with Built-in AI globals — Chrome 138+, Edge                    |
-| Runtime       | Client-only — add `"use client"` in RSC setups (e.g. Next.js app router) |
-| Module format | ESM only                                                                 |
 
 ## Capability check
 
