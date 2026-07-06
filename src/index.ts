@@ -8,7 +8,11 @@ export {
 
 export { isSupported, type BuiltInAIName } from "./is-supported";
 
-export { checkAvailability } from "./check-availability";
+export {
+  checkAvailability,
+  type AvailabilityOptionsMap,
+  type BuiltInAIAvailability,
+} from "./check-availability";
 
 export type { BaseHookReturn, Status } from "./types";
 
