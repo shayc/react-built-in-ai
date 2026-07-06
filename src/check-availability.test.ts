@@ -105,9 +105,7 @@ describe("checkAvailability", () => {
 
     // An unnarrowed BuiltInAIName no longer type-checks option-free, since
     // that name could be "Translator" — the caller must narrow first.
-    void ((name: BuiltInAIName) => {
-      // @ts-expect-error - name isn't narrowed away from "Translator"
-      checkAvailability(name);
-    });
+    // @ts-expect-error - name isn't narrowed away from "Translator"
+    void ((name: BuiltInAIName) => checkAvailability(name));
   });
 });

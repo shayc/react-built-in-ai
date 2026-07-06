@@ -9,7 +9,8 @@ export type BuiltInAIName =
   | "Proofreader"
   | "Summarizer"
   | "Writer"
-  | "LanguageDetector";
+  | "LanguageDetector"
+  | "LanguageModel";
 
 /**
  * Feature-detects a built-in AI namespace. A `true` result means the global

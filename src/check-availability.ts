@@ -18,6 +18,7 @@ export interface AvailabilityOptionsMap {
   Summarizer: SummarizerCreateCoreOptions;
   Writer: WriterCreateCoreOptions;
   LanguageDetector: LanguageDetectorCreateCoreOptions;
+  LanguageModel: LanguageModelCreateCoreOptions;
 }
 
 /**

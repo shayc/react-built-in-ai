@@ -66,6 +66,40 @@ export function buildWriterInstance() {
   };
 }
 
+/**
+ * Fake `LanguageModel` session. `contextUsage` is a live getter advanced by
+ * each turn (`prompt`/`promptStreaming` +10, `append` +5); `fireOverflow()`
+ * dispatches a real `contextoverflow` event to whatever the hook wired up via
+ * `addEventListener`.
+ */
+export function buildLanguageModelInstance() {
+  const target = new EventTarget();
+  let contextUsage = 0;
+  return {
+    prompt: vi.fn((input: string) => {
+      contextUsage += 10;
+      return Promise.resolve(`P:${input}`);
+    }),
+    promptStreaming: vi.fn(() => {
+      contextUsage += 10;
+      return buildChunkStream(["P:", "hi"]);
+    }),
+    append: vi.fn(() => {
+      contextUsage += 5;
+      return Promise.resolve(undefined);
+    }),
+    measureContextUsage: vi.fn(() => Promise.resolve(4)),
+    contextWindow: 4096,
+    get contextUsage() {
+      return contextUsage;
+    },
+    addEventListener: target.addEventListener.bind(target),
+    removeEventListener: target.removeEventListener.bind(target),
+    fireOverflow: () => target.dispatchEvent(new Event("contextoverflow")),
+    destroy: vi.fn<() => void>(),
+  };
+}
+
 export function buildLanguageDetectorInstance() {
   return {
     detect: vi.fn(() =>

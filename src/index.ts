@@ -80,3 +80,14 @@ export {
   type LanguageDetectorHookReturn,
   type LanguageDetectorOptions,
 } from "./language-detector/use-language-detector";
+
+export {
+  createLanguageModel,
+  type CreateLanguageModelOptions,
+} from "./language-model/create-language-model";
+export {
+  useLanguageModel,
+  type LanguageModelHookReturn,
+  type LanguageModelOptions,
+  type PromptCallOptions,
+} from "./language-model/use-language-model";
