@@ -83,6 +83,17 @@ describe("raceAbort", () => {
     );
   });
 
+  test("passes a non-Error rejection through unchanged rather than masking it as AbortError", async () => {
+    const { signal } = new AbortController();
+    // A thrown string is a genuine failure, not a cancellation: it must reach
+    // the caller verbatim, not be rewrapped as an AbortError DOMException.
+    // Rejecting with a non-Error is the whole point of the test, so the
+    // prefer-promise-reject-errors lint rule is deliberately suppressed here.
+    // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+    const rejected = Promise.reject("boom");
+    await expect(raceAbort(rejected, signal)).rejects.toBe("boom");
+  });
+
   test("aborts its cleanup signal once the promise resolves", async () => {
     const { signal } = new AbortController();
     const addSpy = vi.spyOn(signal, "addEventListener");
