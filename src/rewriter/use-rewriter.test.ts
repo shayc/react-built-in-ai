@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 import { renderHook } from "vitest-browser-react";
 import { buildAIFake } from "../internal/testing/ai-namespace-fake";
 import { buildRewriterInstance } from "../internal/testing/instance-fakes";
+import { createRewriter } from "./create-rewriter";
 import { useRewriter } from "./use-rewriter";
 
 describe("useRewriter", () => {
@@ -59,5 +60,22 @@ describe("useRewriter", () => {
       "hi",
       expect.objectContaining({ context: "softer" }),
     );
+  });
+});
+
+describe("createRewriter", () => {
+  test("resolves an AsyncDisposable instance delegating to the namespace", async () => {
+    const { Fake, instances } = buildAIFake({
+      buildInstance: buildRewriterInstance,
+    });
+    vi.stubGlobal("Rewriter", Fake);
+
+    const rewriter = await createRewriter();
+
+    expect(rewriter).toBe(instances[0]);
+    expect(
+      (rewriter as unknown as Record<symbol, unknown>)[Symbol.asyncDispose],
+    ).toBeTypeOf("function");
+    await expect(rewriter.rewrite("draft")).resolves.toBe("R():draft");
   });
 });

@@ -40,13 +40,20 @@ export function raceAbort<T>(
     },
     (error: unknown) => {
       cleanup.abort();
-      reject(toError(error));
+      // The promise's own rejection is a genuine failure, not a cancellation:
+      // pass it through verbatim (mirroring the resolve path above), so a
+      // thrown non-Error isn't misclassified as an AbortError. Only the abort
+      // paths route through toError, where coercing to AbortError is correct.
+      reject(error);
     },
   );
 
   return result;
 }
 
+// Coerces an abort *reason* to an Error, defaulting a non-Error reason to an
+// AbortError — the right classification for a cancellation. Only called with
+// `signal.reason`; a promise's own rejection passes through unwrapped.
 function toError(reason: unknown): Error {
   return reason instanceof Error ? reason : abortError(reason);
 }
