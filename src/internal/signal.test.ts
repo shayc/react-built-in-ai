@@ -101,8 +101,7 @@ describe("raceAbort", () => {
     await raceAbort(Promise.resolve("ok"), signal);
 
     const options = addSpy.mock.calls[0]?.[2] as
-      | AddEventListenerOptions
-      | undefined;
+      AddEventListenerOptions | undefined;
     expect(options?.signal?.aborted).toBe(true);
   });
 
@@ -114,8 +113,7 @@ describe("raceAbort", () => {
     await expect(raceAbort(Promise.reject(inner), signal)).rejects.toBe(inner);
 
     const options = addSpy.mock.calls[0]?.[2] as
-      | AddEventListenerOptions
-      | undefined;
+      AddEventListenerOptions | undefined;
     expect(options?.signal?.aborted).toBe(true);
   });
 });
