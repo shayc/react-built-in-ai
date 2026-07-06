@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 import { renderHook } from "vitest-browser-react";
 import { buildAIFake } from "../internal/testing/ai-namespace-fake";
 import { buildWriterInstance } from "../internal/testing/instance-fakes";
+import { createWriter } from "./create-writer";
 import { useWriter } from "./use-writer";
 
 describe("useWriter", () => {
@@ -57,5 +58,22 @@ describe("useWriter", () => {
       "hi",
       expect.objectContaining({ context: "polite" }),
     );
+  });
+});
+
+describe("createWriter", () => {
+  test("resolves an AsyncDisposable instance delegating to the namespace", async () => {
+    const { Fake, instances } = buildAIFake({
+      buildInstance: buildWriterInstance,
+    });
+    vi.stubGlobal("Writer", Fake);
+
+    const writer = await createWriter();
+
+    expect(writer).toBe(instances[0]);
+    expect(
+      (writer as unknown as Record<symbol, unknown>)[Symbol.asyncDispose],
+    ).toBeTypeOf("function");
+    await expect(writer.write("draft")).resolves.toBe("W():draft");
   });
 });

@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 import { renderHook } from "vitest-browser-react";
 import { buildAIFake } from "../internal/testing/ai-namespace-fake";
 import { buildProofreaderInstance } from "../internal/testing/instance-fakes";
+import { createProofreader } from "./create-proofreader";
 import { useProofreader } from "./use-proofreader";
 
 describe("useProofreader", () => {
@@ -32,5 +33,23 @@ describe("useProofreader", () => {
       // @ts-expect-error - measureInput is not part of ProofreaderHookReturn
       void proofreader.measureInput;
     });
+  });
+});
+
+describe("createProofreader", () => {
+  test("resolves an AsyncDisposable instance delegating to the namespace", async () => {
+    const { Fake, instances } = buildAIFake({
+      buildInstance: buildProofreaderInstance,
+    });
+    vi.stubGlobal("Proofreader", Fake);
+
+    const proofreader = await createProofreader();
+
+    expect(proofreader).toBe(instances[0]);
+    expect(
+      (proofreader as unknown as Record<symbol, unknown>)[Symbol.asyncDispose],
+    ).toBeTypeOf("function");
+    const result = await proofreader.proofread("helo");
+    expect(result.correctedInput).toBe("corrected(helo)");
   });
 });

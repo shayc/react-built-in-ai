@@ -14,10 +14,11 @@ npx playwright install chromium  # one-time, for browser-mode tests
 Common commands:
 
 ```bash
-npm run lint        # eslint
-npm run typecheck   # type-check only (noEmit via tsconfig)
-npm test            # vitest run (browser mode, chromium)
-npm run build       # tsdown → dist/
+npm run lint           # eslint
+npm run typecheck      # type-check only (noEmit via tsconfig)
+npm test               # vitest run (browser mode, chromium)
+npm run test:coverage  # vitest run with V8 coverage + threshold gate
+npm run build          # tsdown → dist/
 ```
 
 ## Pull requests

@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 import { renderHook } from "vitest-browser-react";
 import { buildAIFake } from "../internal/testing/ai-namespace-fake";
 import { buildSummarizerInstance } from "../internal/testing/instance-fakes";
+import { createSummarizer } from "./create-summarizer";
 import { useSummarizer } from "./use-summarizer";
 
 describe("useSummarizer", () => {
@@ -59,5 +60,22 @@ describe("useSummarizer", () => {
       "hi",
       expect.objectContaining({ context: "brief" }),
     );
+  });
+});
+
+describe("createSummarizer", () => {
+  test("resolves an AsyncDisposable instance delegating to the namespace", async () => {
+    const { Fake, instances } = buildAIFake({
+      buildInstance: buildSummarizerInstance,
+    });
+    vi.stubGlobal("Summarizer", Fake);
+
+    const summarizer = await createSummarizer();
+
+    expect(summarizer).toBe(instances[0]);
+    expect(
+      (summarizer as unknown as Record<symbol, unknown>)[Symbol.asyncDispose],
+    ).toBeTypeOf("function");
+    await expect(summarizer.summarize("text")).resolves.toBe("S():text");
   });
 });
