@@ -1,5 +1,11 @@
 # @shayc/react-built-in-ai
 
+## 0.11.1
+
+### Patch Changes
+
+- 17cde10: Mention the Prompt API (`LanguageModel`) in the package description and keywords — it shipped in 0.11 but the npm metadata still listed only the six task APIs.
+
 ## 0.11.0
 
 ### Minor Changes
