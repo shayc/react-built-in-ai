@@ -4,7 +4,7 @@
 [![CI](https://github.com/shayc/react-built-in-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/shayc/react-built-in-ai/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/npm/l/@shayc/react-built-in-ai.svg)](LICENSE)
 
-A thin React layer over the browser's [Built-in AI](https://developer.chrome.com/docs/ai/built-in) APIs — models the browser downloads and runs on-device. Six task APIs, each with a React hook and an imperative creator, all sharing one lifecycle state machine. TypeScript-first, with option and return types exported for every API.
+A thin React layer over the browser's [Built-in AI](https://developer.chrome.com/docs/ai/built-in) APIs — models the browser downloads and runs on-device. Six task APIs plus the Prompt API (`LanguageModel`), each with a React hook and an imperative creator, all sharing one lifecycle state machine. TypeScript-first, with option and return types exported for every API.
 
 **Browser support** — Chromium only (Chrome 138+, Edge); not Firefox or Safari. The Built-in AI globals are gated by Chrome flags / origin trial and absent on unsupported builds — feature-detect with [`isSupported()`](#capability-check) and render a fallback.
 
@@ -48,13 +48,17 @@ On a fresh browser, the first click triggers the model download (gated by user a
 | [Summarizer](https://developer.chrome.com/docs/ai/summarizer-api)            | `useSummarizer`       | `createSummarizer`       |
 | [Writer](https://developer.chrome.com/docs/ai/writer-api)                    | `useWriter`           | `createWriter`           |
 | [Language Detector](https://developer.chrome.com/docs/ai/language-detection) | `useLanguageDetector` | `createLanguageDetector` |
+| [Prompt](https://developer.chrome.com/docs/ai/prompt-api) ¹                  | `useLanguageModel`    | `createLanguageModel`    |
+
+¹ The Prompt API (`LanguageModel`) ships later than the other six — **Chrome 148+ on the web** (138+ in extensions), or via the official [`prompt-api-polyfill`](https://github.com/webmachinelearning/prompt-api#the-explainer). It's also a different shape (a stateful chat session, not a stateless task); see [Prompt API](#prompt-api) for how `useLanguageModel` diverges from the other hooks.
 
 **Use the hook** when options are known at render time (e.g. a translator bound to the user's current language pair). **Use the creator** when options are decided mid-flow and a hook can't be driven (queued work, command palettes, one-shot scripts).
 
-Every hook shares the lifecycle surface plus task-specific methods (`translate`, `rewrite`, `proofread`, `summarize`, `write`, `detect`), along with streaming and `measureInput` variants where the underlying API supports them. Two exceptions:
+Every hook shares the lifecycle surface plus task-specific methods (`translate`, `rewrite`, `proofread`, `summarize`, `write`, `detect`), along with streaming and `measureInput` variants where the underlying API supports them. Exceptions:
 
 - `useProofreader` exposes only `proofread` — the browser API offers no streaming, `measureInput`, or `inputQuota`.
 - `useLanguageDetector` has no streaming variant, and its `detect` resolves with an array of ranked `{ detectedLanguage, confidence }` candidates rather than a string.
+- `useLanguageModel` is a stateful conversation rather than a one-shot task — see [Prompt API](#prompt-api).
 
 ## Requirements
 
@@ -75,7 +79,7 @@ import { isSupported } from "@shayc/react-built-in-ai";
 if (!isSupported("Translator")) return <Fallback />;
 ```
 
-`isSupported(name)` returns `true` when the matching global (`"Translator"`, `"Rewriter"`, `"Proofreader"`, `"Summarizer"`, `"Writer"`, `"LanguageDetector"`) is present on `globalThis`. Combine with the hook's `status` (`"unavailable"`) for the full readiness picture — the global can exist on a device that still can't run the model.
+`isSupported(name)` returns `true` when the matching global (`"Translator"`, `"Rewriter"`, `"Proofreader"`, `"Summarizer"`, `"Writer"`, `"LanguageDetector"`, `"LanguageModel"`) is present on `globalThis`. Combine with the hook's `status` (`"unavailable"`) for the full readiness picture — the global can exist on a device that still can't run the model.
 
 ### Checking availability without a hook
 
@@ -108,6 +112,8 @@ Every hook exposes `status`, `progress`, `error`, and `prepare`. `status` is alw
 ### Instance sharing
 
 Hooks with equal options — same namespace, same options by value — share one underlying model instance and one `status`/`progress`/`error`. The instance is created on the first mount that needs it and torn down when the last component using those options unmounts; everything in between (including a `prepare()` retry from `error`) is visible to every component sharing it. This means two components — say, a settings panel showing download status and a toolbar actually using the model — stay in sync automatically as long as they're called with the same options.
+
+`useLanguageModel` is the one exception: each mount owns a private session (conversations must stay isolated, and its options can't be structurally keyed), so equal-options mounts never share an instance. See [Prompt API](#prompt-api).
 
 ## Usage
 
@@ -185,7 +191,7 @@ A creator requires a user activation only to _start_ a download (`availability()
 ## Download progress
 
 - **Per-instance** — read `progress` and `status` from the hook return, or from a creator's own thrown/awaited lifecycle.
-- **Cross-instance** — `useGlobalDownloadProgress(namespaces?)` reports the progress of the least-complete in-flight download across every instance, regardless of which component (or imperative caller) initiated the download. The value never moves backwards when one of several downloads finishes, and returns to `null` once all of them complete — finished downloads stop being tracked, so key "done" off `null`, not `progress === 1`. Pass a namespace (`"Translator"`, `"Rewriter"`, `"Proofreader"`, `"Summarizer"`, `"Writer"`, `"LanguageDetector"`) or an array of namespaces to scope the aggregation, or call with no argument to track all Built-in AI downloads.
+- **Cross-instance** — `useGlobalDownloadProgress(namespaces?)` reports the progress of the least-complete in-flight download across every instance, regardless of which component (or imperative caller) initiated the download. The value never moves backwards when one of several downloads finishes, and returns to `null` once all of them complete — finished downloads stop being tracked, so key "done" off `null`, not `progress === 1`. Pass a namespace (`"Translator"`, `"Rewriter"`, `"Proofreader"`, `"Summarizer"`, `"Writer"`, `"LanguageDetector"`, `"LanguageModel"`) or an array of namespaces to scope the aggregation, or call with no argument to track all Built-in AI downloads.
 
 ```tsx
 function GlobalDownloadBar() {
@@ -200,6 +206,74 @@ function GlobalDownloadBar() {
 Options are compared structurally — sorted and compared by content, not by reference — so inline object/array literals are safe without memoization: a fresh literal with the same content resolves to the same underlying instance.
 
 When a component's options change, it re-enters the state machine. If it was the last component holding the old options, that instance is destroyed and its in-flight work aborted with `AbortError`; if another component still holds the old options, that instance keeps running for it — an option change never disturbs components still sharing the old instance.
+
+This applies to the six task hooks. `useLanguageModel` **captures its options once, at mount, and ignores later changes** — see below.
+
+## Prompt API
+
+`useLanguageModel` wraps the [Prompt API](https://developer.chrome.com/docs/ai/prompt-api) (`LanguageModel`) — a stateful chat session rather than a stateless task. It shares the same lifecycle (`status`, `progress`, `error`, `prepare`) and the same download/gesture rules as every other hook, but three things differ by design:
+
+- **Each mount owns a private session.** Equal-options mounts never share one instance — sharing would cross-contaminate two components' conversations, and the options (closures in `tools`, blobs in `initialPrompts`) can't be keyed by value anyway. The expensive part — the model download — is still deduplicated by the browser across every session, so concurrent mounts join the same in-flight download gesture-free.
+- **Options are captured at mount** and never re-read from props. A stateful conversation must not be silently discarded because a parent re-rendered with a fresh literal — so inline option literals are safe here precisely because they're _ignored_ after the first render. Change options explicitly with `reset(nextOptions)` or a `key=` remount.
+- **The session is not exposed.** For the raw `LanguageModel` (to `clone()`, or drive `destroy()` yourself), use `createLanguageModel()`.
+
+```tsx
+function Chat() {
+  const model = useLanguageModel({
+    initialPrompts: [
+      { role: "system", content: "You are a helpful assistant." },
+    ],
+  });
+  const [reply, setReply] = useState("");
+
+  if (model.status === "unsupported") return <p>Prompt API not supported.</p>;
+
+  return (
+    <>
+      <button
+        disabled={model.status !== "ready"}
+        onClick={async () => setReply(await model.prompt("Say hi in French."))}
+      >
+        Ask
+      </button>
+      <p>{reply}</p>
+      <small>
+        {model.contextUsage} / {model.contextWindow} tokens
+      </small>
+    </>
+  );
+}
+```
+
+The session methods:
+
+- **`prompt(input, options?)`** / **`promptStream(input, options?)`** — send a turn and get the full response, or stream it (concatenating chunks yields the same result). Both commit the turn to history.
+- **`append(input, options?)`** — add to the history without prompting for a response, e.g. to pre-load context.
+- **`measureContext(input, options?)`** — estimate how many tokens `input` would add, without sending it.
+- **`reset(nextOptions?)`** — discard the conversation and provision a fresh session (with the same options, or a full replacement). Aborts in-flight calls with `AbortError`, destroys the old session, and zeroes `contextUsage` / `overflowCount`.
+
+`input` is a string or a message array; `options` accepts `responseConstraint` (a JSON schema or `RegExp` for **structured output**) and `signal`. **Multimodal input** (`expectedInputs` with `image` / `audio`) and assistant-message `prefix: true` continuations pass through the create/prompt options unchanged.
+
+### Context window and overflow
+
+- **`contextUsage`** grows every turn; **`contextWindow`** is the session's fixed budget (both `0` until `ready`).
+- **`overflowCount`** counts `contextoverflow` events — the browser auto-evicting old turns once the window fills. `useEffect` on it to drive the **session-compacting** pattern: summarize the transcript (`useSummarizer` pairs naturally), then `reset` with the summary as compacted `initialPrompts`.
+
+```tsx
+const model = useLanguageModel({ initialPrompts });
+
+useEffect(() => {
+  if (model.overflowCount === 0) return;
+  // Summarize the running transcript you've been tracking, then restart the
+  // session with a compacted context — the documented compacting recipe.
+  const compacted = compactTranscript();
+  model.reset({ initialPrompts: compacted });
+}, [model.overflowCount]);
+```
+
+### Output variety (`temperature` / `topK`)
+
+Not exposed. On the default web surface the raw `topK` / `temperature` params are origin-trial / extension-gated and silently ignored, and the spec's proposed replacement (`samplingMode` presets) isn't implemented in stable Chrome yet — so neither can honestly be documented as a working knob. `samplingMode` remains accepted in the options type (IDL ignores it until it ships); the type will widen once the surface settles.
 
 ## Errors
 
