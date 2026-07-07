@@ -49,11 +49,11 @@ On a fresh browser, the first click triggers the model download (gated by user a
 
 | Browser API                                                                  | React hook            | Imperative creator       | Chrome              |
 | ---------------------------------------------------------------------------- | --------------------- | ------------------------ | ------------------- |
-| [Translator](https://developer.chrome.com/docs/ai/translator-api)            | `useTranslator`       | `createTranslator`       | 138+                |
-| [Rewriter](https://developer.chrome.com/docs/ai/rewriter-api)                | `useRewriter`         | `createRewriter`         | 138+                |
-| [Proofreader](https://developer.chrome.com/docs/ai/proofreader-api)          | `useProofreader`      | `createProofreader`      | 138+                |
-| [Summarizer](https://developer.chrome.com/docs/ai/summarizer-api)            | `useSummarizer`       | `createSummarizer`       | 138+                |
 | [Writer](https://developer.chrome.com/docs/ai/writer-api)                    | `useWriter`           | `createWriter`           | 138+                |
+| [Rewriter](https://developer.chrome.com/docs/ai/rewriter-api)                | `useRewriter`         | `createRewriter`         | 138+                |
+| [Summarizer](https://developer.chrome.com/docs/ai/summarizer-api)            | `useSummarizer`       | `createSummarizer`       | 138+                |
+| [Proofreader](https://developer.chrome.com/docs/ai/proofreader-api)          | `useProofreader`      | `createProofreader`      | 138+                |
+| [Translator](https://developer.chrome.com/docs/ai/translator-api)            | `useTranslator`       | `createTranslator`       | 138+                |
 | [Language Detector](https://developer.chrome.com/docs/ai/language-detection) | `useLanguageDetector` | `createLanguageDetector` | 138+                |
 | [Prompt](https://developer.chrome.com/docs/ai/prompt-api) ¹                  | `useLanguageModel`    | `createLanguageModel`    | 148+ (138+ in ext.) |
 
@@ -77,7 +77,7 @@ import { isSupported } from "@shayc/react-built-in-ai";
 if (!isSupported("Translator")) return <Fallback />;
 ```
 
-`isSupported(name)` returns `true` when the matching global (`"Translator"`, `"Rewriter"`, `"Proofreader"`, `"Summarizer"`, `"Writer"`, `"LanguageDetector"`, `"LanguageModel"`) is present on `globalThis`. Combine with the hook's `status` (`"unavailable"`) for the full readiness picture — the global can exist on a device that still can't run the model.
+`isSupported(name)` returns `true` when the matching global (`"Writer"`, `"Rewriter"`, `"Summarizer"`, `"Proofreader"`, `"Translator"`, `"LanguageDetector"`, `"LanguageModel"`) is present on `globalThis`. Combine with the hook's `status` (`"unavailable"`) for the full readiness picture — the global can exist on a device that still can't run the model.
 
 ### Checking availability without a hook
 
@@ -108,12 +108,23 @@ unsupported / unavailable                          terminal — no global / devi
 
 `status` is always one of:
 
+**Terminal states:**
+
 - **`unsupported`** — the global namespace is missing on this browser.
 - **`unavailable`** — the model reports it cannot run on this device.
+
+**Transition states:**
+
 - **`checking`** — supported; probing availability, or quietly creating an already-downloaded model. Passes through to `ready` on its own.
 - **`downloadable`** — the model needs a download, which the browser only starts from a **user activation**. Render your download affordance off this state; `prepare()` (or any action method) called from a user gesture moves it along. (The name mirrors the browser's `availability()` vocabulary.) Edge case: a gesture-less call doesn't fail immediately — it re-checks availability first, in case another component or tab finished the download since this hook last looked, and joins an in-flight download if it finds one.
 - **`downloading`** — a download is running. `progress` is `null` until the browser reports a fraction via a `downloadprogress` event, then a number — no starting value is ever fabricated, so a joined download that's already partway done isn't misreported as `0`. The download may have been started by this hook or joined passively (another hook with different options, another tab, or an imperative `create*` call already had it in flight).
+
+**Active state:**
+
 - **`ready`** — the instance is live; action methods can be called freely.
+
+**Failure state:**
+
 - **`error`** — `availability()` or `create()` rejected. Call `prepare()` (from a user activation if a download is required) to tear down and re-initialize.
 
 ### Instance sharing
@@ -206,7 +217,7 @@ A creator requires a user activation only to _start_ a download (`availability()
 ## Download progress
 
 - **Per-instance** — read `progress` and `status` from the hook return, or from a creator's own thrown/awaited lifecycle.
-- **Cross-instance** — `useGlobalDownloadProgress(namespaces?)` reports the progress of the least-complete in-flight download across every instance, regardless of which component (or imperative caller) initiated the download. The value never moves backwards when one of several downloads finishes, and returns to `null` once all of them complete — finished downloads stop being tracked, so key "done" off `null`, not `progress === 1`. Pass a namespace (`"Translator"`, `"Rewriter"`, `"Proofreader"`, `"Summarizer"`, `"Writer"`, `"LanguageDetector"`, `"LanguageModel"`) or an array of namespaces to scope the aggregation, or call with no argument to track all Built-in AI downloads.
+- **Cross-instance** — `useGlobalDownloadProgress(namespaces?)` reports the progress of the least-complete in-flight download across every instance, regardless of which component (or imperative caller) initiated the download. The value never moves backwards when one of several downloads finishes, and returns to `null` once all of them complete — finished downloads stop being tracked, so key "done" off `null`, not `progress === 1`. Pass a namespace (`"Writer"`, `"Rewriter"`, `"Summarizer"`, `"Proofreader"`, `"Translator"`, `"LanguageDetector"`, `"LanguageModel"`) or an array of namespaces to scope the aggregation, or call with no argument to track all Built-in AI downloads.
 
 ```tsx
 function GlobalDownloadBar() {
@@ -262,8 +273,13 @@ function Chat() {
 
 The session methods:
 
+**Core interaction:**
+
 - **`prompt(input, options?)`** / **`promptStream(input, options?)`** — send a turn and get the full response, or stream it (concatenating chunks yields the same result). Both commit the turn to history.
 - **`append(input, options?)`** — add to the history without prompting for a response, e.g. to pre-load context.
+
+**Session management:**
+
 - **`measureContext(input, options?)`** — estimate how many tokens `input` would add, without sending it.
 - **`reset(nextOptions?)`** — discard the conversation and provision a fresh session (with the same options, or a full replacement). Aborts in-flight calls with `AbortError`, destroys the old session, and zeroes `contextUsage` / `overflowCount`.
 

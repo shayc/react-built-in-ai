@@ -2,6 +2,14 @@
 
 Thanks for your interest in contributing to `@shayc/react-built-in-ai`.
 
+## Reporting issues
+
+Open an issue at [github.com/shayc/react-built-in-ai/issues](https://github.com/shayc/react-built-in-ai/issues). To help isolate the problem, please include:
+
+- **Browser and Chrome version**
+- **The Built-in AI API** (Writer, Rewriter, Summarizer, Proofreader, Translator, Language Detector, or Prompt)
+- **A minimal reproduction** (CodeSandbox, StackBlitz, or a small repo), if possible.
+
 ## Development
 
 Requires Node 22+.
@@ -29,10 +37,6 @@ Any user-facing change (new feature, bug fix, breaking change, dependency bump t
 npx changeset
 ```
 
-Choose patch / minor / major and write a short summary. The changeset bot will turn this into a "Version Packages" PR on merge, and merging that PR triggers the publish.
+Choose patch, minor, or major and write a short summary. The changeset bot will turn this into a "Version Packages" PR on merge, and merging that PR triggers the publish.
 
 Pure refactors, docs-only changes, and CI tweaks don't need a changeset.
-
-## Reporting issues
-
-Open an issue at [github.com/shayc/react-built-in-ai/issues](https://github.com/shayc/react-built-in-ai/issues). Include the browser, Chrome version, the Built-in AI API you're using (Translator / Rewriter / Proofreader / Summarizer / Writer / Language Detector / Prompt), and a minimal reproduction if possible.
