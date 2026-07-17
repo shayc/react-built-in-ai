@@ -135,7 +135,7 @@ export interface LanguageModelHookReturn extends BaseHookReturn {
  *   });
  *   return (
  *     <button
- *       disabled={model.status !== "ready"}
+ *       disabled={model.status === "downloading"}
  *       onClick={async () => setReply(await model.prompt("Hi!"))}
  *     >
  *       Ask

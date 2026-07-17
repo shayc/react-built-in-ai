@@ -2,13 +2,22 @@
 
 [![npm version](https://img.shields.io/npm/v/@shayc/react-built-in-ai.svg)](https://www.npmjs.com/package/@shayc/react-built-in-ai)
 [![CI](https://github.com/shayc/react-built-in-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/shayc/react-built-in-ai/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/npm/l/@shayc/react-built-in-ai.svg)](LICENSE)
+[![npm downloads](https://img.shields.io/npm/dm/@shayc/react-built-in-ai.svg)](https://www.npmjs.com/package/@shayc/react-built-in-ai)
+[![minzipped size](https://img.shields.io/bundlephobia/minzip/@shayc/react-built-in-ai)](https://bundlephobia.com/package/@shayc/react-built-in-ai)
+[![types](https://img.shields.io/npm/types/@shayc/react-built-in-ai)](https://www.npmjs.com/package/@shayc/react-built-in-ai)
+[![License: MIT](https://img.shields.io/npm/l/@shayc/react-built-in-ai.svg)](https://github.com/shayc/react-built-in-ai/blob/main/LICENSE)
 
-A thin React layer over the browser's [Built-in AI](https://developer.chrome.com/docs/ai/built-in) APIs — models the browser downloads and runs on-device, including Gemini Nano (which powers the Prompt and writing APIs). Six task APIs plus the Prompt API (`LanguageModel`), each with a React hook and an imperative creator.
+React hooks for the browser's [built-in AI](https://developer.chrome.com/docs/ai/built-in) APIs — translate, summarize, write, rewrite, proofread, detect languages, and prompt, with models the browser downloads once and runs on-device. No API key, no server, no per-token costs.
 
-Used raw, these APIs make you hand-roll availability probes, user-activation-gated downloads, `downloadprogress` wiring, instance cleanup, and deduplication across components. The hooks fold all of that into one lifecycle state machine: read `status` and `progress`, call the task method. TypeScript-first, with option and return types exported for every API; ESM, no runtime dependencies (one type-only package).
+- 🪝 A React hook + an imperative creator for each of the seven APIs
+- 📦 ~9 kB gzipped, tree-shakeable ESM, zero runtime dependencies (one type-only package)
+- 🔄 Availability probing, gesture-gated downloads, progress reporting, and instance cleanup folded into one lifecycle: read `status` and `progress`, call the task method
+- 🤝 Hooks with equal options share one model instance and one status automatically
+- 🌊 Streaming variants wherever the underlying API streams
+- 🧷 TypeScript-first, with option and return types exported for every API
+- 🧪 Tested in real Chromium on every commit; releases ship with npm provenance
 
-**Browser support** — Chromium only (Chrome 138+, Edge); not Firefox or Safari. Some of the globals are still gated by Chrome flags or an origin trial, and all are absent on unsupported builds — feature-detect with [`isSupported()`](#capability-check) and render a fallback.
+The underlying APIs are proposed web standards, incubated in the W3C [Web Machine Learning groups](https://github.com/webmachinelearning). **Browser support today** — Chromium-based browsers (Chrome 138+, Edge); not yet Firefox or Safari. Some of the globals are still gated by flags or an origin trial, and all are absent on unsupported builds — feature-detect with [`isSupported()`](#capability-check) and render a fallback.
 
 ## Install
 
@@ -47,17 +56,17 @@ On a fresh browser, the first click triggers the model download (gated by user a
 
 ## API
 
-| Browser API                                                                  | React hook            | Imperative creator       | Chrome              |
-| ---------------------------------------------------------------------------- | --------------------- | ------------------------ | ------------------- |
-| [Writer](https://developer.chrome.com/docs/ai/writer-api)                    | `useWriter`           | `createWriter`           | 138+                |
-| [Rewriter](https://developer.chrome.com/docs/ai/rewriter-api)                | `useRewriter`         | `createRewriter`         | 138+                |
-| [Summarizer](https://developer.chrome.com/docs/ai/summarizer-api)            | `useSummarizer`       | `createSummarizer`       | 138+                |
-| [Proofreader](https://developer.chrome.com/docs/ai/proofreader-api)          | `useProofreader`      | `createProofreader`      | 138+                |
-| [Translator](https://developer.chrome.com/docs/ai/translator-api)            | `useTranslator`       | `createTranslator`       | 138+                |
-| [Language Detector](https://developer.chrome.com/docs/ai/language-detection) | `useLanguageDetector` | `createLanguageDetector` | 138+                |
-| [Prompt](https://developer.chrome.com/docs/ai/prompt-api) ¹                  | `useLanguageModel`    | `createLanguageModel`    | 148+ (138+ in ext.) |
+| Browser API                                                                  | React hook            | Imperative creator       | Chrome                    |
+| ---------------------------------------------------------------------------- | --------------------- | ------------------------ | ------------------------- |
+| [Writer](https://developer.chrome.com/docs/ai/writer-api)                    | `useWriter`           | `createWriter`           | 138+                      |
+| [Rewriter](https://developer.chrome.com/docs/ai/rewriter-api)                | `useRewriter`         | `createRewriter`         | 138+                      |
+| [Summarizer](https://developer.chrome.com/docs/ai/summarizer-api)            | `useSummarizer`       | `createSummarizer`       | 138+                      |
+| [Proofreader](https://developer.chrome.com/docs/ai/proofreader-api)          | `useProofreader`      | `createProofreader`      | 138+                      |
+| [Translator](https://developer.chrome.com/docs/ai/translator-api)            | `useTranslator`       | `createTranslator`       | 138+                      |
+| [Language Detector](https://developer.chrome.com/docs/ai/language-detection) | `useLanguageDetector` | `createLanguageDetector` | 138+                      |
+| [Prompt](https://developer.chrome.com/docs/ai/prompt-api) ¹                  | `useLanguageModel`    | `createLanguageModel`    | 148+ (138+ in extensions) |
 
-¹ Available earlier via the official [`prompt-api-polyfill`](https://github.com/webmachinelearning/prompt-api#the-explainer). It's also a different shape — a stateful chat session, not a stateless task; see [Prompt API](#prompt-api) for how `useLanguageModel` diverges from the other hooks.
+¹ Available earlier via Google's [`prompt-api-polyfill`](https://www.npmjs.com/package/prompt-api-polyfill). It's also a different shape — a stateful chat session, not a stateless task; see [Prompt API](#prompt-api) for how `useLanguageModel` diverges from the other hooks.
 
 **Use the hook** when options are known at render time (e.g. a translator bound to the user's current language pair). **Use the creator** when options are decided mid-flow and a hook can't be driven (queued work, command palettes, one-shot scripts).
 
@@ -102,7 +111,8 @@ Every hook exposes `status`, `progress`, `error`, and `prepare`. The paths throu
 ```text
 checking → ready                                   model already on device
 checking → downloadable → downloading → ready      download needed — starts on a user gesture
-checking | downloading → error                     probe/create rejected — prepare() retries
+checking → downloading → ready                     joins a download already in flight elsewhere
+checking / downloading → error                     probe/create rejected — prepare() retries
 unsupported / unavailable                          terminal — no global / device can't run the model
 ```
 
@@ -141,7 +151,7 @@ Hooks with equal options — same namespace, same options by value — share one
 
 ## Handling the lifecycle in UI
 
-Action methods are gated by the lifecycle — they throw `UnsupportedError`, `UnavailableError`, `MissingUserActivationError`, or `NotReadyError` when the state forbids them. **A call rejected by the gate never mutates the hook's `status` or `error`.** (A call made from `downloadable` with a user activation is not gate-rejected — it drives `status` through `downloading` to `ready` or `error` like `prepare()`.)
+Action methods are gated by the lifecycle — they throw `UnsupportedError`, `UnavailableError`, `MissingUserActivationError`, or `NotReadyError` when the state forbids them. **A call rejected by the gate never changes the hook's settled `status` or `error`** — at most, a gesture-less call from `downloadable` passes through `checking` while it re-probes (the edge case above) before parking back where it was. (A call made from `downloadable` with a user activation is not gate-rejected — it drives `status` through `downloading` to `ready` or `error` like `prepare()`.)
 
 ```tsx
 function Demo() {
@@ -154,16 +164,31 @@ function Demo() {
   if (translator.status === "unsupported") return <p>Not supported.</p>;
   if (translator.status === "unavailable") return <p>Not available.</p>;
 
+  // 2. Surface failures — prepare() from a click is the retry path.
+  if (translator.status === "error") {
+    return (
+      <button onClick={() => translator.prepare().catch(() => {})}>
+        Something went wrong — retry
+      </button>
+    );
+  }
+
   return (
     <button
-      // 2. Block re-entry while the model is downloading.
+      // 3. Block re-entry while the model is downloading.
       disabled={translator.status === "downloading"}
       onClick={async () => {
-        // 3. The click is a user activation, so the hook is allowed to start
-        //    the download here if status was "downloadable"; otherwise it runs
-        //    at once.
-        const out = await translator.translate("…some text…");
-        console.log(out);
+        try {
+          // 4. The click is a user activation, so the hook is allowed to
+          //    start the download here if status was "downloadable";
+          //    otherwise it runs at once.
+          const out = await translator.translate("…some text…");
+          console.log(out);
+        } catch {
+          // Rejections here are cancellations (AbortError) or the gate
+          // errors from the Errors table below — `status` and `error`
+          // already reflect the latter, and the branch above renders retry.
+        }
       }}
     >
       {translator.status !== "downloading"
@@ -176,7 +201,7 @@ function Demo() {
 }
 ```
 
-### Streaming
+## Streaming
 
 Accumulate chunks into React state to render incrementally:
 
@@ -257,7 +282,7 @@ function Chat() {
   return (
     <>
       <button
-        disabled={model.status !== "ready"}
+        disabled={model.status === "downloading"}
         onClick={async () => setReply(await model.prompt("Say hi in French."))}
       >
         Ask
@@ -292,14 +317,18 @@ The session methods:
 
 ```tsx
 const model = useLanguageModel({ initialPrompts });
+// reset is referentially stable; overflowCount is what drives the effect.
+const { overflowCount, reset } = model;
 
 useEffect(() => {
-  if (model.overflowCount === 0) return;
+  if (overflowCount === 0) return;
   // Summarize the running transcript you've been tracking, then restart the
   // session with a compacted context — the documented compacting recipe.
+  // reset() replaces the options wholesale (no merge), so include everything
+  // the session needs, not just initialPrompts.
   const compacted = compactTranscript();
-  model.reset({ initialPrompts: compacted });
-}, [model.overflowCount]);
+  reset({ initialPrompts: compacted });
+}, [overflowCount, reset]);
 ```
 
 ### Output variety (`temperature` / `topK`)
@@ -325,18 +354,18 @@ A per-call `signal` cancels the _caller's_ wait and the underlying action call, 
 
 ## Security
 
-No network calls — everything runs against the browser's on-device model. Releases are published to npm with [provenance attestations](https://docs.npmjs.com/generating-provenance-statements) so the bytes you install can be traced back to a specific GitHub Actions run.
+The library itself makes no network requests and sends nothing anywhere — inference runs against the browser's on-device model, and the only network activity is the browser's own model download. Releases are published to npm with [provenance attestations](https://docs.npmjs.com/generating-provenance-statements) so the bytes you install can be traced back to a specific GitHub Actions run.
 
 Found a security issue? Open a private advisory at [github.com/shayc/react-built-in-ai/security/advisories/new](https://github.com/shayc/react-built-in-ai/security/advisories/new).
 
 ## Versioning
 
-Semver; see [CHANGELOG.md](CHANGELOG.md).
+Semver; see [CHANGELOG.md](https://github.com/shayc/react-built-in-ai/blob/main/CHANGELOG.md).
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup (Node 22+, Vitest browser mode, the changeset workflow).
+See [CONTRIBUTING.md](https://github.com/shayc/react-built-in-ai/blob/main/CONTRIBUTING.md) for development setup (Node 22+, Vitest browser mode, the changeset workflow).
 
 ## License
 
-[MIT](LICENSE) © Shay Cojocaru
+[MIT](https://github.com/shayc/react-built-in-ai/blob/main/LICENSE) © Shay Cojocaru
