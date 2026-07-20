@@ -40,7 +40,7 @@ export class MissingUserActivationError extends BuiltInAIError {
   }
 }
 
-/** A prior `create()` rejected; the lifecycle is stuck in an error state until `prepare()` retries. Inspect `.cause` for the underlying rejection. */
+/** A prior availability probe or `create()` rejected; call `prepare()` to retry and inspect `.cause` for the underlying rejection. */
 export class NotReadyError extends BuiltInAIError {
   override name = "NotReadyError";
   constructor(cause?: unknown) {

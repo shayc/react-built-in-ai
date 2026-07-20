@@ -7,8 +7,9 @@ export interface CreateWriterOptions extends WriterOptions {
 }
 
 /**
- * Imperative `Writer` factory. Mirrors the {@link useWriter} lifecycle for call
- * sites that decide options mid-flow and can't render a hook.
+ * Imperative `Writer` factory for options decided mid-flow. Uses the same
+ * provisioning rules as {@link useWriter}, but returns one promise rather than
+ * reactive lifecycle state.
  *
  * Throws `UnsupportedError`, `UnavailableError`, or
  * `MissingUserActivationError` — a user activation is required only to start

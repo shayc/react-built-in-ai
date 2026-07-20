@@ -2,22 +2,14 @@
 
 [![npm version](https://img.shields.io/npm/v/@shayc/react-built-in-ai.svg)](https://www.npmjs.com/package/@shayc/react-built-in-ai)
 [![CI](https://github.com/shayc/react-built-in-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/shayc/react-built-in-ai/actions/workflows/ci.yml)
-[![npm downloads](https://img.shields.io/npm/dm/@shayc/react-built-in-ai.svg)](https://www.npmjs.com/package/@shayc/react-built-in-ai)
 [![minzipped size](https://img.shields.io/bundlephobia/minzip/@shayc/react-built-in-ai)](https://bundlephobia.com/package/@shayc/react-built-in-ai)
-[![types](https://img.shields.io/npm/types/@shayc/react-built-in-ai)](https://www.npmjs.com/package/@shayc/react-built-in-ai)
-[![License: MIT](https://img.shields.io/npm/l/@shayc/react-built-in-ai.svg)](https://github.com/shayc/react-built-in-ai/blob/main/LICENSE)
 
-React hooks for the browser's [built-in AI](https://developer.chrome.com/docs/ai/built-in) APIs — translate, summarize, write, rewrite, proofread, detect languages, and prompt, with models the browser downloads once and runs on-device. No API key, no server, no per-token costs.
+React hooks for the browser's [built-in AI](https://developer.chrome.com/docs/ai/built-in) APIs: translate, summarize, write, rewrite, proofread, detect languages, and prompt with browser-managed, on-device models. No API key, server, or per-token cost.
 
-- 🪝 A React hook + an imperative creator for each of the seven APIs
-- 📦 ~9 kB gzipped, tree-shakeable ESM, zero runtime dependencies (one type-only package)
-- 🔄 Availability probing, gesture-gated downloads, progress reporting, and instance cleanup folded into one lifecycle: read `status` and `progress`, call the task method
-- 🤝 Hooks with equal options share one model instance and one status automatically
-- 🌊 Streaming variants wherever the underlying API streams
-- 🧷 TypeScript-first, with option and return types exported for every API
-- 🧪 Tested in real Chromium on every commit; releases ship with npm provenance
-
-The underlying APIs are proposed web standards, incubated in the W3C [Web Machine Learning groups](https://github.com/webmachinelearning). **Browser support today** — Chromium-based browsers (Chrome 138+, Edge); not yet Firefox or Safari. Some of the globals are still gated by flags or an origin trial, and all are absent on unsupported builds — feature-detect with [`isSupported()`](#capability-check) and render a fallback.
+- A React hook and imperative creator for each of the seven APIs
+- One lifecycle for availability, gesture-gated downloads, progress, and cleanup
+- Streaming where the browser API supports it
+- TypeScript-first, tree-shakeable ESM with no runtime dependencies (~9 kB gzipped)
 
 ## Install
 
@@ -25,347 +17,216 @@ The underlying APIs are proposed web standards, incubated in the W3C [Web Machin
 npm install @shayc/react-built-in-ai
 ```
 
-Requires React 18 or 19 (peer dependency). Client-only — add `"use client"` in RSC setups (e.g. the Next.js app router).
+React 18 or 19 is required. The APIs only run in a browser; the hooks render safely during SSR, but components using them must be client components (`"use client"` in React Server Component setups).
+
+## API availability
+
+Built-in AI availability changes independently of this package. The current Chrome surface is:
+
+| Browser API                                                                  | React hook            | Imperative creator       | Chrome availability              |
+| ---------------------------------------------------------------------------- | --------------------- | ------------------------ | -------------------------------- |
+| [Translator](https://developer.chrome.com/docs/ai/translator-api)            | `useTranslator`       | `createTranslator`       | Stable, desktop, 138+            |
+| [Language Detector](https://developer.chrome.com/docs/ai/language-detection) | `useLanguageDetector` | `createLanguageDetector` | Stable, desktop, 138+            |
+| [Summarizer](https://developer.chrome.com/docs/ai/summarizer-api)            | `useSummarizer`       | `createSummarizer`       | Stable, desktop, 138+            |
+| [Prompt](https://developer.chrome.com/docs/ai/prompt-api)                    | `useLanguageModel`    | `createLanguageModel`    | Stable 148+; extensions from 138 |
+| [Writer](https://developer.chrome.com/docs/ai/writer-api)                    | `useWriter`           | `createWriter`           | Developer trial                  |
+| [Rewriter](https://developer.chrome.com/docs/ai/rewriter-api)                | `useRewriter`         | `createRewriter`         | Developer trial                  |
+| [Proofreader](https://developer.chrome.com/docs/ai/proofreader-api)          | `useProofreader`      | `createProofreader`      | Developer trial                  |
+
+See Chrome's [live API status](https://developer.chrome.com/docs/ai/built-in-apis) before shipping. Microsoft Edge implements compatible globals, but versions and release channels vary by API; see its [writing](https://learn.microsoft.com/en-us/microsoft-edge/web-platform/writing-assistance-apis), [translation](https://learn.microsoft.com/en-us/microsoft-edge/web-platform/translator-api), and [Prompt](https://learn.microsoft.com/en-us/microsoft-edge/web-platform/prompt-api) documentation.
+
+Every integration should handle `unsupported` and `unavailable`. Hardware, storage, policy, and model availability can make an exposed API unavailable on a particular device.
 
 ## Quick start
 
 ```tsx
+import { useState } from "react";
 import { useTranslator } from "@shayc/react-built-in-ai";
 
-function Translate() {
+export function Translate() {
   const translator = useTranslator({
     sourceLanguage: "en",
     targetLanguage: "es",
   });
+  const [output, setOutput] = useState("");
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  // Non-Chromium browser — see Capability check for feature detection.
-  if (translator.status === "unsupported") return <p>Not supported here.</p>;
+  if (translator.status === "checking") {
+    return <p>Checking availability…</p>;
+  }
+  if (translator.status === "unsupported") {
+    return <p>Not supported here.</p>;
+  }
+  if (translator.status === "unavailable") {
+    return <p>Not available on this device.</p>;
+  }
 
-  return (
-    <button
-      disabled={translator.status === "downloading"}
-      onClick={async () => alert(await translator.translate("Hello, world."))}
-    >
-      Translate
-    </button>
-  );
-}
-```
-
-On a fresh browser, the first click triggers the model download (gated by user activation); subsequent clicks call `translate` directly. See [Lifecycle](#lifecycle) for the full state machine.
-
-## API
-
-| Browser API                                                                  | React hook            | Imperative creator       | Chrome                    |
-| ---------------------------------------------------------------------------- | --------------------- | ------------------------ | ------------------------- |
-| [Writer](https://developer.chrome.com/docs/ai/writer-api)                    | `useWriter`           | `createWriter`           | 138+                      |
-| [Rewriter](https://developer.chrome.com/docs/ai/rewriter-api)                | `useRewriter`         | `createRewriter`         | 138+                      |
-| [Summarizer](https://developer.chrome.com/docs/ai/summarizer-api)            | `useSummarizer`       | `createSummarizer`       | 138+                      |
-| [Proofreader](https://developer.chrome.com/docs/ai/proofreader-api)          | `useProofreader`      | `createProofreader`      | 138+                      |
-| [Translator](https://developer.chrome.com/docs/ai/translator-api)            | `useTranslator`       | `createTranslator`       | 138+                      |
-| [Language Detector](https://developer.chrome.com/docs/ai/language-detection) | `useLanguageDetector` | `createLanguageDetector` | 138+                      |
-| [Prompt](https://developer.chrome.com/docs/ai/prompt-api) ¹                  | `useLanguageModel`    | `createLanguageModel`    | 148+ (138+ in extensions) |
-
-¹ Available earlier via Google's [`prompt-api-polyfill`](https://www.npmjs.com/package/prompt-api-polyfill). It's also a different shape — a stateful chat session, not a stateless task; see [Prompt API](#prompt-api) for how `useLanguageModel` diverges from the other hooks.
-
-**Use the hook** when options are known at render time (e.g. a translator bound to the user's current language pair). **Use the creator** when options are decided mid-flow and a hook can't be driven (queued work, command palettes, one-shot scripts).
-
-Every hook shares the lifecycle surface plus task-specific methods (`translate`, `rewrite`, `proofread`, `summarize`, `write`, `detect`), along with streaming and `measureInput` variants where the underlying API supports them. Exceptions:
-
-- `useProofreader` exposes only `proofread` — the browser API offers no streaming, `measureInput`, or `inputQuota`.
-- `useLanguageDetector` has no streaming variant, and its `detect` resolves with an array of ranked `{ detectedLanguage, confidence }` candidates rather than a string.
-- `useLanguageModel` is a stateful conversation rather than a one-shot task — see [Prompt API](#prompt-api).
-
-## Capability check
-
-Feature-detect before mounting any hook:
-
-```tsx
-import { isSupported } from "@shayc/react-built-in-ai";
-
-if (!isSupported("Translator")) return <Fallback />;
-```
-
-`isSupported(name)` returns `true` when the matching global (`"Writer"`, `"Rewriter"`, `"Summarizer"`, `"Proofreader"`, `"Translator"`, `"LanguageDetector"`, `"LanguageModel"`) is present on `globalThis`. Combine with the hook's `status` (`"unavailable"`) for the full readiness picture — the global can exist on a device that still can't run the model.
-
-### Checking availability without a hook
-
-`checkAvailability(name, options)` runs the same on-device readiness probe every hook and creator uses internally, without mounting a hook or creating an instance. Use it for a capability list or settings screen that needs a real status for options the user hasn't committed to yet. Options are optional for every API except `"Translator"`, which needs a language pair to answer meaningfully:
-
-```tsx
-import { checkAvailability } from "@shayc/react-built-in-ai";
-
-const availability = await checkAvailability("Translator", {
-  sourceLanguage: "en",
-  targetLanguage: "es",
-});
-// "available" | "downloadable" | "downloading" | "unavailable"
-```
-
-It throws `UnsupportedError` when the global is absent — check `isSupported()` first if you'd rather branch on that yourself. Unlike the hook's `status`, this is a one-shot probe: it doesn't stay in sync if availability changes afterward.
-
-## Lifecycle
-
-Every hook exposes `status`, `progress`, `error`, and `prepare`. The paths through the state machine:
-
-```text
-checking → ready                                   model already on device
-checking → downloadable → downloading → ready      download needed — starts on a user gesture
-checking → downloading → ready                     joins a download already in flight elsewhere
-checking / downloading → error                     probe/create rejected — prepare() retries
-unsupported / unavailable                          terminal — no global / device can't run the model
-```
-
-`status` is always one of:
-
-**Terminal states:**
-
-- **`unsupported`** — the global namespace is missing on this browser.
-- **`unavailable`** — the model reports it cannot run on this device.
-
-**Transition states:**
-
-- **`checking`** — supported; probing availability, or quietly creating an already-downloaded model. Passes through to `ready` on its own.
-- **`downloadable`** — the model needs a download, which the browser only starts from a **user activation**. Render your download affordance off this state; `prepare()` (or any action method) called from a user gesture moves it along. (The name mirrors the browser's `availability()` vocabulary.) Edge case: a gesture-less call doesn't fail immediately — it re-checks availability first, in case another component or tab finished the download since this hook last looked, and joins an in-flight download if it finds one.
-- **`downloading`** — a download is running. `progress` is `null` until the browser reports a fraction via a `downloadprogress` event, then a number — no starting value is ever fabricated, so a joined download that's already partway done isn't misreported as `0`. The download may have been started by this hook or joined passively (another hook with different options, another tab, or an imperative `create*` call already had it in flight).
-
-**Active state:**
-
-- **`ready`** — the instance is live; action methods can be called freely.
-
-**Failure state:**
-
-- **`error`** — `availability()` or `create()` rejected. Call `prepare()` (from a user activation if a download is required) to tear down and re-initialize.
-
-### Instance sharing
-
-Hooks with equal options — same namespace, same options by value — share one underlying model instance and one `status`/`progress`/`error`. The instance is created on the first mount that needs it and torn down when the last component using those options unmounts; everything in between (including a `prepare()` retry from `error`) is visible to every component sharing it. This means two components — say, a settings panel showing download status and a toolbar actually using the model — stay in sync automatically as long as they're called with the same options.
-
-`useLanguageModel` is the one exception: each mount owns a private session (conversations must stay isolated, and its options can't be structurally keyed), so equal-options mounts never share an instance. See [Prompt API](#prompt-api).
-
-### Troubleshooting
-
-- **`unsupported` on a current Chrome** — some APIs are still flag- or origin-trial-gated depending on the API and Chrome release (the Prompt API on the web most notably). Check the Chrome doc linked in the [API table](#api) for current status.
-- **`unavailable`** — the device doesn't meet Chrome's hardware or storage requirements for that model (also listed in each API's Chrome doc). Render a fallback; retrying won't help.
-- **Stuck on `downloadable`** — downloads start only from a user gesture. Call `prepare()` or any action method from a click/keypress handler, not from an effect.
-
-## Handling the lifecycle in UI
-
-Action methods are gated by the lifecycle — they throw `UnsupportedError`, `UnavailableError`, `MissingUserActivationError`, or `NotReadyError` when the state forbids them. **A call rejected by the gate never changes the hook's settled `status` or `error`** — at most, a gesture-less call from `downloadable` passes through `checking` while it re-probes (the edge case above) before parking back where it was. (A call made from `downloadable` with a user activation is not gate-rejected — it drives `status` through `downloading` to `ready` or `error` like `prepare()`.)
-
-```tsx
-function Demo() {
-  const translator = useTranslator({
-    sourceLanguage: "en",
-    targetLanguage: "es",
-  });
-
-  // 1. Guard against browsers/devices that can't run the model.
-  if (translator.status === "unsupported") return <p>Not supported.</p>;
-  if (translator.status === "unavailable") return <p>Not available.</p>;
-
-  // 2. Surface failures — prepare() from a click is the retry path.
   if (translator.status === "error") {
     return (
-      <button onClick={() => translator.prepare().catch(() => {})}>
-        Something went wrong — retry
-      </button>
+      <>
+        <button
+          onClick={() => {
+            setActionError(null);
+            void translator.prepare().catch((error: unknown) => {
+              setActionError(
+                error instanceof Error ? error.message : "Retry failed",
+              );
+            });
+          }}
+        >
+          Retry
+        </button>
+        <p role="alert">
+          {actionError ?? translator.error?.message ?? "Initialization failed"}
+        </p>
+      </>
     );
   }
 
-  return (
-    <button
-      // 3. Block re-entry while the model is downloading.
-      disabled={translator.status === "downloading"}
-      onClick={async () => {
-        try {
-          // 4. The click is a user activation, so the hook is allowed to
-          //    start the download here if status was "downloadable";
-          //    otherwise it runs at once.
-          const out = await translator.translate("…some text…");
-          console.log(out);
-        } catch {
-          // Rejections here are cancellations (AbortError) or the gate
-          // errors from the Errors table below — `status` and `error`
-          // already reflect the latter, and the branch above renders retry.
-        }
-      }}
-    >
-      {translator.status !== "downloading"
-        ? "Translate"
-        : translator.progress === null // null until the browser reports a fraction
-          ? "Downloading…"
-          : `Downloading (${Math.round(translator.progress * 100)}%)`}
-    </button>
-  );
-}
-```
-
-## Streaming
-
-Accumulate chunks into React state to render incrementally:
-
-```tsx
-const [output, setOutput] = useState("");
-
-async function handleTranslate(text: string) {
-  setOutput("");
-  for await (const chunk of translator.translateStream(text)) {
-    setOutput((prev) => prev + chunk);
-  }
-}
-```
-
-## Imperative creators
-
-```ts
-try {
-  await using translator = await createTranslator({
-    sourceLanguage,
-    targetLanguage,
-  });
-  const text = await translator.translate(input);
-} catch (error) {
-  if (!(error instanceof BuiltInAIError)) throw error;
-  // unsupported / unavailable / missing-activation — render a fallback.
-}
-```
-
-Each `create*` mirrors the hook lifecycle exactly — same three typed errors (`UnsupportedError`, `UnavailableError`, `MissingUserActivationError`), same progress wiring. Unlike with the hooks, **other browser rejections surface unchanged** — most commonly `AbortError` when `signal` fires, or `NetworkError` on a failed download. The `instanceof BuiltInAIError` check above is what separates the typed lifecycle errors from those pass-throughs.
-
-The returned instance is `AsyncDisposable` — prefer `await using` (TypeScript 5.2+) so it's released on scope exit. On older toolchains, or to release earlier, call `.destroy()` in a `finally`.
-
-Each creator accepts the same options as its hook, plus an optional `signal` that cancels both the download (if any) and the underlying `create()` call.
-
-A creator requires a user activation only to _start_ a download (`availability()` reporting `"downloadable"`) — prefer calling it from an event handler, or pre-warm the model via the matching hook elsewhere in the tree before the call site is reached. If a download is already in flight elsewhere (`"downloading"`), the creator joins it gesture-free, same as a hook that finds one on probe.
-
-## Download progress
-
-- **Per-instance** — read `progress` and `status` from the hook return, or from a creator's own thrown/awaited lifecycle.
-- **Cross-instance** — `useGlobalDownloadProgress(namespaces?)` reports the progress of the least-complete in-flight download across every instance, regardless of which component (or imperative caller) initiated the download. The value never moves backwards when one of several downloads finishes, and returns to `null` once all of them complete — finished downloads stop being tracked, so key "done" off `null`, not `progress === 1`. Pass a namespace (`"Writer"`, `"Rewriter"`, `"Summarizer"`, `"Proofreader"`, `"Translator"`, `"LanguageDetector"`, `"LanguageModel"`) or an array of namespaces to scope the aggregation, or call with no argument to track all Built-in AI downloads.
-
-```tsx
-function GlobalDownloadBar() {
-  const progress = useGlobalDownloadProgress();
-  if (progress === null) return null;
-  return <ProgressBar value={progress} />;
-}
-```
-
-## Option changes
-
-Options are compared structurally — sorted and compared by content, not by reference — so inline object/array literals are safe without memoization: a fresh literal with the same content resolves to the same underlying instance.
-
-When a component's options change, it re-enters the state machine. If it was the last component holding the old options, that instance is destroyed and its in-flight work aborted with `AbortError`; if another component still holds the old options, that instance keeps running for it — an option change never disturbs components still sharing the old instance.
-
-This applies to the six task hooks. `useLanguageModel` **captures its options once, at mount, and ignores later changes** — see below.
-
-## Prompt API
-
-`useLanguageModel` wraps the [Prompt API](https://developer.chrome.com/docs/ai/prompt-api) (`LanguageModel`) — a stateful chat session rather than a stateless task. It shares the same lifecycle (`status`, `progress`, `error`, `prepare`) and the same download/gesture rules as every other hook, but three things differ by design:
-
-- **Each mount owns a private session.** Equal-options mounts never share one instance — sharing would cross-contaminate two components' conversations, and the options (closures in `tools`, blobs in `initialPrompts`) can't be keyed by value anyway. The expensive part — the model download — is still deduplicated by the browser across every session, so concurrent mounts join the same in-flight download gesture-free.
-- **Options are captured at mount** and never re-read from props. A stateful conversation must not be silently discarded because a parent re-rendered with a fresh literal — so inline option literals are safe here precisely because they're _ignored_ after the first render. Change options explicitly with `reset(nextOptions)` or a `key=` remount.
-- **The session is not exposed.** For the raw `LanguageModel` (to `clone()`, or drive `destroy()` yourself), use `createLanguageModel()`.
-
-```tsx
-function Chat() {
-  const model = useLanguageModel({
-    initialPrompts: [
-      { role: "system", content: "You are a helpful assistant." },
-    ],
-  });
-  const [reply, setReply] = useState("");
-
-  if (model.status === "unsupported") return <p>Prompt API not supported.</p>;
+  const downloading = translator.status === "downloading";
 
   return (
     <>
       <button
-        disabled={model.status === "downloading"}
-        onClick={async () => setReply(await model.prompt("Say hi in French."))}
+        disabled={downloading}
+        onClick={async () => {
+          setActionError(null);
+          try {
+            setOutput(await translator.translate("Hello, world."));
+          } catch (error) {
+            if (error instanceof DOMException && error.name === "AbortError") {
+              return;
+            }
+            setActionError(
+              error instanceof Error ? error.message : "Translation failed",
+            );
+          }
+        }}
       >
-        Ask
+        {downloading
+          ? translator.progress === null
+            ? "Downloading…"
+            : `Downloading (${Math.round(translator.progress * 100)}%)`
+          : translator.status === "downloadable"
+            ? "Download and translate"
+            : "Translate"}
       </button>
-      <p>{reply}</p>
-      <small>
-        {model.contextUsage} / {model.contextWindow} tokens
-      </small>
+      {output && <p>{output}</p>}
+      {actionError && <p role="alert">{actionError}</p>}
     </>
   );
 }
 ```
 
-The session methods:
+If the model is not cached, the first click authorizes its download and waits for the translation. Later calls run against the browser-managed model directly.
 
-**Core interaction:**
+## Hook lifecycle
 
-- **`prompt(input, options?)`** / **`promptStream(input, options?)`** — send a turn and get the full response, or stream it (concatenating chunks yields the same result). Both commit the turn to history.
-- **`append(input, options?)`** — add to the history without prompting for a response, e.g. to pre-load context.
+Every hook exposes `status`, `progress`, `error`, and `prepare()`:
 
-**Session management:**
+| Status         | Recommended UI                                                                 |
+| -------------- | ------------------------------------------------------------------------------ |
+| `checking`     | Show a short loading state while the hook probes or creates a cached model.    |
+| `downloadable` | Enable a button that calls `prepare()` or the task method from a user gesture. |
+| `downloading`  | Disable duplicate actions and show `progress` when it is available.            |
+| `ready`        | Enable normal task actions.                                                    |
+| `unsupported`  | Render a browser/API fallback.                                                 |
+| `unavailable`  | Render a device fallback; retrying will not help.                              |
+| `error`        | Show `error` and call `prepare()` from a retry button.                         |
 
-- **`measureContext(input, options?)`** — estimate how many tokens `input` would add, without sending it.
-- **`reset(nextOptions?)`** — discard the conversation and provision a fresh session (with the same options, or a full replacement). Aborts in-flight calls with `AbortError`, destroys the old session, and zeroes `contextUsage` / `overflowCount`.
+`progress` is `null` until the browser reports a fraction, then a number from `0` to `1`. It returns to `null` outside `downloading`. The browser requires a transient user activation to start a model download, so call `prepare()` or the first task action directly from a click or keypress—not from an effect, timer, page load, or after an `await`.
 
-`input` is a string or a message array; `options` accepts `responseConstraint` (a JSON schema or `RegExp` for **structured output**) and `signal`. **Multimodal input** (`expectedInputs` with `image` / `audio`) and assistant-message `prefix: true` continuations pass through the create/prompt options unchanged.
+Task hooks with structurally equal options share an underlying instance, so inline option objects and arrays do not need memoization. `useLanguageModel` is the exception: each mount owns a private conversation. See the [advanced lifecycle guide](https://github.com/shayc/react-built-in-ai/blob/main/docs/lifecycle.md) for download revalidation, progress aggregation, sharing, option changes, and retries.
 
-### Context window and overflow
+### Capability utilities
 
-- **`contextUsage`** grows every turn; **`contextWindow`** is the session's fixed budget (both `0` until `ready`).
-- **`overflowCount`** counts `contextoverflow` events — the browser auto-evicting old turns once the window fills. `useEffect` on it to drive the **session-compacting** pattern: summarize the transcript (`useSummarizer` pairs naturally), then `reset` with the summary as compacted `initialPrompts`.
+Inside React, prefer the hook's `status`; it is SSR-safe and includes device availability. `isSupported(name)` is useful outside React or when choosing between separate components. Do not use it during SSR to select different server and client markup—the built-in globals do not exist on the server.
+
+`checkAvailability(name, options?)` performs a one-shot browser readiness probe without mounting a hook or creating an instance. Translator options are required because availability depends on the language pair. It throws `UnsupportedError` when the matching global is absent.
+
+## Hook surface
+
+| Hook                  | Task methods                                         | Result and notes                                         |
+| --------------------- | ---------------------------------------------------- | -------------------------------------------------------- |
+| `useTranslator`       | `translate`, `translateStream`, `measureInput`       | `string`; requires source and target languages           |
+| `useLanguageDetector` | `detect`, `measureInput`                             | Ranked `LanguageDetectionResult[]`; no streaming         |
+| `useSummarizer`       | `summarize`, `summarizeStream`, `measureInput`       | `string`                                                 |
+| `useWriter`           | `write`, `writeStream`, `measureInput`               | `string`                                                 |
+| `useRewriter`         | `rewrite`, `rewriteStream`, `measureInput`           | `string`                                                 |
+| `useProofreader`      | `proofread`                                          | `ProofreadResult`; no streaming or input measurement     |
+| `useLanguageModel`    | `prompt`, `promptStream`, `append`, `measureContext` | Stateful session; also exposes `reset` and context state |
+
+The five measured task hooks expose `inputQuota`, which is `0` until the model is ready. Every task method accepts the browser API's per-call options, including an optional `signal` for cancellation.
+
+### Streaming
+
+Streaming methods return `AsyncIterable<string>` chunks:
 
 ```tsx
-const model = useLanguageModel({ initialPrompts });
-// reset is referentially stable; overflowCount is what drives the effect.
-const { overflowCount, reset } = model;
-
-useEffect(() => {
-  if (overflowCount === 0) return;
-  // Summarize the running transcript you've been tracking, then restart the
-  // session with a compacted context — the documented compacting recipe.
-  // reset() replaces the options wholesale (no merge), so include everything
-  // the session needs, not just initialPrompts.
-  const compacted = compactTranscript();
-  reset({ initialPrompts: compacted });
-}, [overflowCount, reset]);
+setOutput("");
+for await (const chunk of translator.translateStream(input, { signal })) {
+  setOutput((previous) => previous + chunk);
+}
 ```
 
-### Output variety (`temperature` / `topK`)
+Breaking or throwing out of the loop cancels the underlying stream.
 
-Not exposed. In stable Chrome on the web, the raw `topK` / `temperature` params are silently ignored, and the spec's proposed replacement (`samplingMode` presets) hasn't shipped — neither is a working knob yet. `samplingMode` is still accepted in the options type (the browser ignores it until it ships); the type will widen once the surface settles.
+## Imperative creators
 
-## Errors
+Use a creator when options are decided mid-flow or a hook cannot represent the workflow:
 
-Lifecycle gating throws `BuiltInAIError` subclasses. Action methods (`translate`, `rewrite`, …) pass the browser API's own rejections through unchanged — most commonly an `AbortError` `DOMException` when a `signal` fires. When the lifecycle wraps a browser rejection into `"error"` state, the original error is preserved as `error.cause`.
+```ts
+import { createTranslator } from "@shayc/react-built-in-ai";
 
-| Error                        | What to do                                                                                                                       |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `UnsupportedError`           | The namespace is missing. Feature-detect with `isSupported()` and render a fallback.                                             |
-| `UnavailableError`           | The device can't run the model. Render a fallback; don't retry.                                                                  |
-| `MissingUserActivationError` | A download needed to be started without a user gesture. Trigger `prepare()` (or the first action) from a click/keypress handler. |
-| `NotReadyError`              | A prior `create()` failed. Call `prepare()` from a user activation to retry; inspect `error.cause` for the underlying reason.    |
+async function translate(
+  input: string,
+  sourceLanguage: string,
+  targetLanguage: string,
+) {
+  await using translator = await createTranslator({
+    sourceLanguage,
+    targetLanguage,
+  });
+  return translator.translate(input);
+}
+```
 
-Components with equal options share one lifecycle: if another component sharing your options calls `prepare()` to retry from `"error"`, that restarts the shared store — any of your own in-flight action calls reject with a `DOMException` named `AbortError`. Filter it like any other cancellation (`error.name === "AbortError"`), not as a failure.
+- Creators accept the hook options plus `signal`, and return the raw browser instance as `AsyncDisposable`. On older toolchains, call `.destroy()` in `finally`.
+- They use the same availability, activation, download, and cancellation rules as hooks, but expose no reactive `status`, `error`, retry method, or per-call progress.
+- They reject with `UnsupportedError`, `UnavailableError`, or `MissingUserActivationError`; other browser rejections such as `AbortError` and `NetworkError` pass through unchanged.
+- Call a creator from a user gesture when it may need to start a download. Joining a download already in flight does not require another gesture.
 
-## Cancellation
+## Global download progress
 
-A per-call `signal` cancels the _caller's_ wait and the underlying action call, but does not tear down the shared model instance. If the hook is mid-download, aborting one call rejects that call with `AbortError` while the download keeps running for any other caller (and for the next call from the same component). **The download is only cancelled when the last component sharing it unmounts (or changes options such that it's no longer the last holder).** A sibling component's `prepare()` retry can also abort your in-flight call — see Errors above.
+`useGlobalDownloadProgress(namespaces?)` reports the least-complete download started by any hook or creator. Pass a namespace, an array, or nothing to observe all Built-in AI downloads. An in-flight download with no browser progress event yet contributes `0`; when every matching download finishes, the value returns to `null` rather than remaining at `1`.
+
+## Prompt sessions
+
+`useLanguageModel` wraps the stateful Prompt API and differs from the task hooks in three ways:
+
+- Each mount owns a private session; equal options never share conversation state.
+- Options are captured at mount. Use `reset(nextOptions)` or a `key` remount to change them.
+- The raw session is hidden. Use `createLanguageModel()` when you need `clone()` or direct lifecycle control.
+
+The hook also exposes `contextUsage`, `contextWindow`, and `overflowCount`. Prompt and append calls update usage; `reset()` discards the conversation and provisions a fresh session. When `overflowCount` increases, applications that must preserve older context can summarize their own transcript and call `reset({ ...options, initialPrompts })`. `reset(nextOptions)` replaces the full options object, so include every option the new session needs.
+
+## Errors and cancellation
+
+Lifecycle gates use `BuiltInAIError` subclasses:
+
+| Error                        | Meaning and response                                                                            |
+| ---------------------------- | ----------------------------------------------------------------------------------------------- |
+| `UnsupportedError`           | The namespace is absent. Render a browser/API fallback.                                         |
+| `UnavailableError`           | The device cannot run the model. Render a fallback rather than retrying.                        |
+| `MissingUserActivationError` | A download must start from a user gesture. Move `prepare()` or the task call into that handler. |
+| `NotReadyError`              | A prior probe or `create()` failed. Inspect `.cause` and call `prepare()` to retry.             |
+
+Browser action errors pass through unchanged. In particular, cancellation rejects with a `DOMException` named `AbortError`; treat it as cancellation rather than a lifecycle failure. A per-call signal cancels that caller's wait and action, not a shared model download. The last unmount or option change tears down an unreferenced task instance and aborts its work.
 
 ## Security
 
-The library itself makes no network requests and sends nothing anywhere — inference runs against the browser's on-device model, and the only network activity is the browser's own model download. Releases are published to npm with [provenance attestations](https://docs.npmjs.com/generating-provenance-statements) so the bytes you install can be traced back to a specific GitHub Actions run.
+The library makes no network requests and sends task inputs nowhere. The browser manages model downloads, caching, updates, and eviction; inference runs on-device. Releases are published to npm with [provenance attestations](https://docs.npmjs.com/generating-provenance-statements).
 
-Found a security issue? Open a private advisory at [github.com/shayc/react-built-in-ai/security/advisories/new](https://github.com/shayc/react-built-in-ai/security/advisories/new).
+Report vulnerabilities through a [private GitHub security advisory](https://github.com/shayc/react-built-in-ai/security/advisories/new).
 
-## Versioning
-
-Semver; see [CHANGELOG.md](https://github.com/shayc/react-built-in-ai/blob/main/CHANGELOG.md).
-
-## Contributing
-
-See [CONTRIBUTING.md](https://github.com/shayc/react-built-in-ai/blob/main/CONTRIBUTING.md) for development setup (Node 22+, Vitest browser mode, the changeset workflow).
-
-## License
-
-[MIT](https://github.com/shayc/react-built-in-ai/blob/main/LICENSE) © Shay Cojocaru
+[Changelog](https://github.com/shayc/react-built-in-ai/blob/main/CHANGELOG.md) · [Contributing](https://github.com/shayc/react-built-in-ai/blob/main/CONTRIBUTING.md) · [MIT License](https://github.com/shayc/react-built-in-ai/blob/main/LICENSE) © Shay Cojocaru

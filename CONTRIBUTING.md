@@ -1,27 +1,38 @@
 # Contributing
 
-Thanks for your interest in contributing to `@shayc/react-built-in-ai`.
-
 ## Reporting issues
 
-Open an issue at [github.com/shayc/react-built-in-ai/issues](https://github.com/shayc/react-built-in-ai/issues). To help isolate the problem, please include:
+Open an issue at [github.com/shayc/react-built-in-ai/issues](https://github.com/shayc/react-built-in-ai/issues). Built-in AI behavior varies by browser, release channel, device, and model state, so include:
 
-- **Browser and Chrome version**
+- **Browser, version, and channel** (stable, beta, dev, or canary)
+- **Operating system and relevant device hardware**
 - **The Built-in AI API** (Writer, Rewriter, Summarizer, Proofreader, Translator, Language Detector, or Prompt)
-- **A minimal reproduction** (CodeSandbox, StackBlitz, or a small repo), if possible.
+- **API options and lifecycle status** when the problem occurs
+- **The thrown error and `error.cause`**, when present
+- **Flags, origin-trial tokens, or enterprise policies** affecting the API
+- **Whether the model was cached or downloading for the first time**
+- **A minimal reproduction** (CodeSandbox, StackBlitz, or a small repository), when possible
 
 ## Development
 
 Requires Node 22+.
 
 ```bash
-npm install
+npm ci
 npx playwright install chromium  # one-time, for browser-mode tests
 ```
 
-Common commands:
+Run the same local validation expected from a pull request:
 
 ```bash
+npm run check
+```
+
+Individual commands:
+
+```bash
+npm run dev            # rebuild dist/ while source files change
+npm run format:check   # verify Prettier formatting
 npm run lint           # eslint
 npm run typecheck      # type-check only (noEmit via tsconfig)
 npm test               # vitest run (browser mode, chromium)
