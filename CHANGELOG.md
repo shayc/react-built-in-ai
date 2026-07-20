@@ -1,5 +1,11 @@
 # @shayc/react-built-in-ai
 
+## 0.11.4
+
+### Patch Changes
+
+- 0bfe7d1: Refresh the package documentation and developer guidance.
+
 ## 0.11.3
 
 ### Patch Changes
