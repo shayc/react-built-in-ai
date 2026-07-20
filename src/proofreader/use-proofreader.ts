@@ -4,9 +4,8 @@ import type { BaseHookReturn } from "../types";
 
 /**
  * Options for {@link useProofreader}. Mirrors `Proofreader.create()` minus the
- * hook-managed `signal` and `monitor`. Compared structurally (sorted-key
- * identity, not reference) — inline option literals, including array-valued
- * options, are safe without memoization.
+ * hook-managed `signal` and `monitor`. Compared by value, so inline literals
+ * are safe without memoization.
  *
  * @see https://developer.chrome.com/docs/ai/proofreader-api
  */
@@ -40,26 +39,8 @@ export interface ProofreaderHookReturn extends BaseHookReturn {
 
 /**
  * React hook around the browser's [Proofreader API](https://developer.chrome.com/docs/ai/proofreader-api).
- * See {@link BaseHookReturn} for the lifecycle and gating rules.
- *
- * @example
- * ```tsx
- * function Proof({ text }: { text: string }) {
- *   const [corrections, setCorrections] = useState<ProofreadCorrection[]>([]);
- *   const proofreader = useProofreader({ includeCorrectionTypes: true });
- *   return (
- *     <button
- *       disabled={proofreader.status === "downloading"}
- *       onClick={async () => {
- *         const result = await proofreader.proofread(text);
- *         setCorrections(result.corrections);
- *       }}
- *     >
- *       Proofread
- *     </button>
- *   );
- * }
- * ```
+ * See {@link BaseHookReturn} for lifecycle and gating rules, and the README
+ * quick start for a complete status-to-UI example.
  */
 export function useProofreader(
   options?: ProofreaderOptions,

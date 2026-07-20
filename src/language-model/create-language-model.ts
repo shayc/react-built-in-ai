@@ -7,11 +7,10 @@ export interface CreateLanguageModelOptions extends LanguageModelOptions {
 }
 
 /**
- * Imperative `LanguageModel` factory. Mirrors the {@link useLanguageModel}
- * download lifecycle for call sites that decide options mid-flow and can't
- * render a hook — and is the escape hatch to the raw session (for `clone()`,
- * the clone-per-call few-shot pattern, or direct `destroy()` control), which
- * the hook deliberately hides.
+ * Imperative `LanguageModel` factory for options decided mid-flow. Uses the
+ * same provisioning rules as {@link useLanguageModel}, but returns one promise
+ * rather than reactive lifecycle state. It is also the escape hatch to the raw
+ * session for `clone()` and direct `destroy()` control.
  *
  * Throws `UnsupportedError`, `UnavailableError`, or
  * `MissingUserActivationError` — a user activation is required only to start a

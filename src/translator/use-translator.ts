@@ -5,10 +5,8 @@ import type { BaseHookReturn } from "../types";
 
 /**
  * Options for {@link useTranslator}. Mirrors `Translator.create()` minus the
- * hook-managed `signal` and `monitor`. Compared structurally (sorted-key
- * identity, not reference) — changing `sourceLanguage` or `targetLanguage`
- * re-enters the lifecycle for the new pair, and inline option literals are
- * safe without memoization.
+ * hook-managed `signal` and `monitor`. Compared by value, so inline literals
+ * are safe; changing the language pair selects a new lifecycle.
  *
  * @see https://developer.chrome.com/docs/ai/translator-api
  */
@@ -52,26 +50,8 @@ export interface TranslatorHookReturn extends BaseHookReturn {
 
 /**
  * React hook around the browser's [Translator API](https://developer.chrome.com/docs/ai/translator-api).
- * See {@link BaseHookReturn} for the lifecycle and gating rules.
- *
- * @example
- * ```tsx
- * function Translate({ text }: { text: string }) {
- *   const [output, setOutput] = useState("");
- *   const translator = useTranslator({
- *     sourceLanguage: "en",
- *     targetLanguage: "es",
- *   });
- *   return (
- *     <button
- *       disabled={translator.status === "downloading"}
- *       onClick={async () => setOutput(await translator.translate(text))}
- *     >
- *       Translate
- *     </button>
- *   );
- * }
- * ```
+ * See {@link BaseHookReturn} for lifecycle and gating rules, and the README
+ * quick start for a complete status-to-UI example.
  */
 export function useTranslator(
   options: TranslatorOptions,

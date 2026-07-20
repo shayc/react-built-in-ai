@@ -7,8 +7,9 @@ export interface CreateRewriterOptions extends RewriterOptions {
 }
 
 /**
- * Imperative `Rewriter` factory. Mirrors the {@link useRewriter} lifecycle for
- * call sites that decide options mid-flow and can't render a hook.
+ * Imperative `Rewriter` factory for options decided mid-flow. Uses the same
+ * provisioning rules as {@link useRewriter}, but returns one promise rather
+ * than reactive lifecycle state.
  *
  * Throws `UnsupportedError`, `UnavailableError`, or
  * `MissingUserActivationError` — a user activation is required only to start

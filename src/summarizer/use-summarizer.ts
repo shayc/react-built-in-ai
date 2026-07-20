@@ -5,9 +5,8 @@ import type { BaseHookReturn } from "../types";
 
 /**
  * Options for {@link useSummarizer}. Mirrors `Summarizer.create()` minus the
- * hook-managed `signal` and `monitor`. Compared structurally (sorted-key
- * identity, not reference) — inline option literals, including array-valued
- * options, are safe without memoization.
+ * hook-managed `signal` and `monitor`. Compared by value, so inline literals
+ * are safe without memoization.
  *
  * @see https://developer.chrome.com/docs/ai/summarizer-api
  */
@@ -51,23 +50,8 @@ export interface SummarizerHookReturn extends BaseHookReturn {
 
 /**
  * React hook around the browser's [Summarizer API](https://developer.chrome.com/docs/ai/summarizer-api).
- * See {@link BaseHookReturn} for the lifecycle and gating rules.
- *
- * @example
- * ```tsx
- * function Summary({ article }: { article: string }) {
- *   const [output, setOutput] = useState("");
- *   const summarizer = useSummarizer({ type: "key-points", length: "short" });
- *   return (
- *     <button
- *       disabled={summarizer.status === "downloading"}
- *       onClick={async () => setOutput(await summarizer.summarize(article))}
- *     >
- *       Summarize
- *     </button>
- *   );
- * }
- * ```
+ * See {@link BaseHookReturn} for lifecycle and gating rules, and the README
+ * quick start for a complete status-to-UI example.
  */
 export function useSummarizer(
   options?: SummarizerOptions,

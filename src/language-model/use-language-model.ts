@@ -78,7 +78,7 @@ export interface LanguageModelHookReturn extends BaseHookReturn {
     input: LanguageModelPrompt,
     options?: PromptCallOptions,
   ): Promise<number>;
-  /** Live usage of the session's context window. `0` until ready; grows per turn. */
+  /** Current usage of the session's context window. `0` until ready. */
   contextUsage: number;
   /** Context-window size of the current session. `0` until ready. */
   contextWindow: number;
@@ -124,25 +124,8 @@ export interface LanguageModelHookReturn extends BaseHookReturn {
  * options never share one instance (conversations must stay isolated), and
  * options are captured at mount rather than structurally re-keyed. The model
  * download is still deduplicated by the browser across every `create()`, so
- * concurrent mounts join the same in-flight download gesture-free.
- *
- * @example
- * ```tsx
- * function Chat() {
- *   const [reply, setReply] = useState("");
- *   const model = useLanguageModel({
- *     initialPrompts: [{ role: "system", content: "You are a helpful assistant." }],
- *   });
- *   return (
- *     <button
- *       disabled={model.status === "downloading"}
- *       onClick={async () => setReply(await model.prompt("Hi!"))}
- *     >
- *       Ask
- *     </button>
- *   );
- * }
- * ```
+ * concurrent mounts join the same in-flight download gesture-free. See the
+ * README for lifecycle UI and session-compaction guidance.
  */
 export function useLanguageModel(
   options?: LanguageModelOptions,

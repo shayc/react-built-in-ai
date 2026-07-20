@@ -5,9 +5,8 @@ import type { BaseHookReturn } from "../types";
 
 /**
  * Options for {@link useRewriter}. Mirrors `Rewriter.create()` minus the
- * hook-managed `signal` and `monitor`. Compared structurally (sorted-key
- * identity, not reference) — inline option literals, including array-valued
- * options, are safe without memoization.
+ * hook-managed `signal` and `monitor`. Compared by value, so inline literals
+ * are safe without memoization.
  *
  * @see https://developer.chrome.com/docs/ai/rewriter-api
  */
@@ -48,23 +47,8 @@ export interface RewriterHookReturn extends BaseHookReturn {
 
 /**
  * React hook around the browser's [Rewriter API](https://developer.chrome.com/docs/ai/rewriter-api).
- * See {@link BaseHookReturn} for the lifecycle and gating rules.
- *
- * @example
- * ```tsx
- * function PoliteRephrase({ draft }: { draft: string }) {
- *   const [output, setOutput] = useState("");
- *   const rewriter = useRewriter({ tone: "more-formal" });
- *   return (
- *     <button
- *       disabled={rewriter.status === "downloading"}
- *       onClick={async () => setOutput(await rewriter.rewrite(draft))}
- *     >
- *       Make it polite
- *     </button>
- *   );
- * }
- * ```
+ * See {@link BaseHookReturn} for lifecycle and gating rules, and the README
+ * quick start for a complete status-to-UI example.
  */
 export function useRewriter(options?: RewriterOptions): RewriterHookReturn {
   const { status, progress, error, prepare, inputQuota, acquire } =

@@ -7,9 +7,9 @@ export interface CreateTranslatorOptions extends TranslatorOptions {
 }
 
 /**
- * Imperative `Translator` factory. Mirrors the {@link useTranslator} lifecycle
- * for call sites that decide the language pair mid-flow and can't render a
- * hook.
+ * Imperative `Translator` factory for call sites that decide the language pair
+ * mid-flow. Uses the same provisioning rules as {@link useTranslator}, but
+ * returns one promise rather than reactive lifecycle state.
  *
  * Throws `UnsupportedError`, `UnavailableError`, or
  * `MissingUserActivationError` — a user activation is required only to start

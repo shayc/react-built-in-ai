@@ -5,9 +5,8 @@ import type { BaseHookReturn } from "../types";
 
 /**
  * Options for {@link useWriter}. Mirrors `Writer.create()` minus the
- * hook-managed `signal` and `monitor`. Compared structurally (sorted-key
- * identity, not reference) — inline option literals, including array-valued
- * options, are safe without memoization.
+ * hook-managed `signal` and `monitor`. Compared by value, so inline literals
+ * are safe without memoization.
  *
  * @see https://developer.chrome.com/docs/ai/writer-api
  */
@@ -45,23 +44,8 @@ export interface WriterHookReturn extends BaseHookReturn {
 
 /**
  * React hook around the browser's [Writer API](https://developer.chrome.com/docs/ai/writer-api).
- * See {@link BaseHookReturn} for the lifecycle and gating rules.
- *
- * @example
- * ```tsx
- * function Draft({ prompt }: { prompt: string }) {
- *   const [output, setOutput] = useState("");
- *   const writer = useWriter({ tone: "formal", length: "short" });
- *   return (
- *     <button
- *       disabled={writer.status === "downloading"}
- *       onClick={async () => setOutput(await writer.write(prompt))}
- *     >
- *       Draft
- *     </button>
- *   );
- * }
- * ```
+ * See {@link BaseHookReturn} for lifecycle and gating rules, and the README
+ * quick start for a complete status-to-UI example.
  */
 export function useWriter(options?: WriterOptions): WriterHookReturn {
   const { status, progress, error, prepare, inputQuota, acquire } =

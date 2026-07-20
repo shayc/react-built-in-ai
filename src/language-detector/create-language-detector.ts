@@ -7,9 +7,9 @@ export interface CreateLanguageDetectorOptions extends LanguageDetectorOptions {
 }
 
 /**
- * Imperative `LanguageDetector` factory. Mirrors the
- * {@link useLanguageDetector} lifecycle for call sites that decide options
- * mid-flow and can't render a hook.
+ * Imperative `LanguageDetector` factory for options decided mid-flow. Uses the
+ * same provisioning rules as {@link useLanguageDetector}, but returns one
+ * promise rather than reactive lifecycle state.
  *
  * Throws `UnsupportedError`, `UnavailableError`, or
  * `MissingUserActivationError` — a user activation is required only to start

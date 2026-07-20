@@ -4,9 +4,8 @@ import type { BaseHookReturn } from "../types";
 
 /**
  * Options for {@link useLanguageDetector}. Mirrors `LanguageDetector.create()`
- * minus the hook-managed `signal` and `monitor`. Compared structurally
- * (sorted-key identity, not reference) — inline option literals, including
- * array-valued options, are safe without memoization.
+ * minus the hook-managed `signal` and `monitor`. Compared by value, so inline
+ * literals are safe without memoization.
  *
  * @see https://developer.chrome.com/docs/ai/language-detection
  */
@@ -51,26 +50,8 @@ export interface LanguageDetectorHookReturn extends BaseHookReturn {
 
 /**
  * React hook around the browser's [Language Detector API](https://developer.chrome.com/docs/ai/language-detection).
- * See {@link BaseHookReturn} for the lifecycle and gating rules.
- *
- * @example
- * ```tsx
- * function Detect({ text }: { text: string }) {
- *   const [language, setLanguage] = useState<string>();
- *   const detector = useLanguageDetector();
- *   return (
- *     <button
- *       disabled={detector.status === "downloading"}
- *       onClick={async () => {
- *         const [top] = await detector.detect(text);
- *         setLanguage(top?.detectedLanguage);
- *       }}
- *     >
- *       Detect language
- *     </button>
- *   );
- * }
- * ```
+ * See {@link BaseHookReturn} for lifecycle and gating rules, and the README
+ * quick start for a complete status-to-UI example.
  */
 export function useLanguageDetector(
   options?: LanguageDetectorOptions,

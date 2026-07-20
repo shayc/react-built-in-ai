@@ -24,11 +24,7 @@ jobs:
           registry-url: "https://registry.npmjs.org"
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npm run lint
-      - run: npm run format:check
-      - run: npm run typecheck
-      - run: npm run test:coverage
-      - run: npm run build
+      - run: npm run check
       - uses: changesets/action@v1
         with:
           version: npm run version
