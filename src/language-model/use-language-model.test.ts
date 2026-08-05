@@ -238,6 +238,84 @@ describe("useLanguageModel", () => {
     expect(create.mock.calls[1][0]).toMatchObject(system("b"));
   });
 
+  test("reset(); prompt() routes the prompt to the replacement session", async () => {
+    const { Fake, create, instances } = buildAIFake<LMInstance>({
+      buildInstance: buildLanguageModelInstance,
+    });
+    vi.stubGlobal("LanguageModel", Fake);
+
+    const { result } = await renderHook(() => useLanguageModel(system("old")));
+    await vi.waitFor(() => expect(result.current.status).toBe("ready"));
+
+    result.current.reset(system("fresh"));
+    const prompted = result.current.prompt("Start fresh");
+
+    await expect(prompted).resolves.toBe("P:Start fresh");
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(create.mock.calls[1][0]).toMatchObject(system("fresh"));
+    expect(instances[0].prompt).not.toHaveBeenCalled();
+    expect(instances[1].prompt).toHaveBeenCalledWith(
+      "Start fresh",
+      expect.any(Object),
+    );
+  });
+
+  test("reset(); prepare() waits until the replacement session is ready", async () => {
+    const first = buildLanguageModelInstance();
+    const second = buildLanguageModelInstance();
+    let resolveReplacement!: (instance: LMInstance) => void;
+    const create = vi.fn(() =>
+      create.mock.calls.length === 1
+        ? Promise.resolve(first)
+        : new Promise<LMInstance>((resolve) => {
+            resolveReplacement = resolve;
+          }),
+    );
+    vi.stubGlobal("LanguageModel", {
+      availability: vi.fn(() => Promise.resolve("available")),
+      create,
+    });
+
+    const { result } = await renderHook(() => useLanguageModel());
+    await vi.waitFor(() => expect(result.current.status).toBe("ready"));
+
+    result.current.reset();
+    let prepared = false;
+    const preparation = result.current.prepare().then(() => {
+      prepared = true;
+    });
+
+    await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(2));
+    expect(prepared).toBe(false);
+
+    resolveReplacement(second);
+    await preparation;
+    expect(prepared).toBe(true);
+    expect(first.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  test("a newer reset cancels actions waiting on a superseded generation", async () => {
+    const { Fake, create, instances } = buildAIFake<LMInstance>({
+      buildInstance: buildLanguageModelInstance,
+    });
+    vi.stubGlobal("LanguageModel", Fake);
+
+    const { result } = await renderHook(() => useLanguageModel(system("old")));
+    await vi.waitFor(() => expect(result.current.status).toBe("ready"));
+
+    result.current.reset(system("superseded"));
+    const obsoletePrompt = result.current.prompt("obsolete");
+    result.current.reset(system("fresh"));
+    const freshPrompt = result.current.prompt("current");
+
+    await expect(obsoletePrompt).rejects.toMatchObject({ name: "AbortError" });
+    await expect(freshPrompt).resolves.toBe("P:current");
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(create.mock.calls[1][0]).toMatchObject(system("fresh"));
+    expect(instances[0].prompt).not.toHaveBeenCalled();
+    expect(instances[1].prompt).toHaveBeenCalledTimes(1);
+  });
+
   test("reset() re-attaches the overflow listener to the fresh session", async () => {
     const { Fake, create, instances } = buildAIFake<LMInstance>({
       buildInstance: buildLanguageModelInstance,

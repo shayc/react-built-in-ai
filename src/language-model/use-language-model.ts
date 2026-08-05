@@ -95,6 +95,8 @@ export interface LanguageModelHookReturn extends BaseHookReturn {
    * Aborts any in-flight call with `AbortError`, destroys the old session, and
    * zeroes {@link contextUsage} / {@link overflowCount}. Passing compacted
    * `initialPrompts` here is the documented session-compacting / -restore path.
+   * Calls made immediately after `reset()` wait for and use the replacement
+   * session, so `reset(); await prompt(...)` is a safe atomic boundary.
    */
   reset(nextOptions?: LanguageModelOptions): void;
   /**

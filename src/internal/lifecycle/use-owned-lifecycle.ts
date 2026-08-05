@@ -1,9 +1,58 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { BuiltInAIName } from "../../is-supported";
+import { abortError, mergeSignals, raceAbort } from "../signal";
 import { release, retain, type Store } from "./registry";
 import { createStore } from "./store";
 
 let nextToken = 0;
+
+interface OwnedGeneration<
+  Options extends object,
+  Model extends DestroyableModel,
+> {
+  key: string;
+  store: Store<Options, Model>;
+  activate(): void;
+  cancelActivation(reason: unknown): void;
+  waitForActivation(callerSignal?: AbortSignal): Promise<void>;
+}
+
+function createOwnedGeneration<
+  Options extends object,
+  Model extends DestroyableModel,
+>(
+  globalName: BuiltInAIName,
+  options: Options | undefined,
+  readQuota?: (instance: Model) => number,
+): OwnedGeneration<Options, Model> {
+  const store = createStore<Options, Model>(globalName, options, readQuota);
+  const activationController = new AbortController();
+  const { promise: activation, resolve } = Promise.withResolvers<void>();
+  let activated = false;
+
+  return {
+    key: `${globalName}:#${nextToken++}`,
+    store,
+    activate() {
+      if (activated || activationController.signal.aborted) {
+        return;
+      }
+      activated = true;
+      resolve();
+    },
+    cancelActivation(reason: unknown) {
+      if (!activated) {
+        activationController.abort(reason);
+      }
+    },
+    waitForActivation(callerSignal?: AbortSignal) {
+      return raceAbort(
+        activation,
+        mergeSignals(activationController.signal, callerSignal),
+      );
+    },
+  };
+}
 
 /**
  * Per-mount sibling of {@link useLifecycle}: each mount owns its own store and
@@ -37,58 +86,75 @@ export function useOwnedLifecycle<
   // literal. Updated only by replace(nextOptions).
   const optionsRef = useRef(options);
 
-  const [token, setToken] = useState(() => nextToken++);
-  const [store, setStore] = useState<Store<Options, Model>>(() =>
-    // `options` (not optionsRef.current) so no ref is read during render — the
-    // two are equal on this first-render-only initializer anyway.
-    createStore<Options, Model>(globalName, options, readQuota),
+  const [generation, setGeneration] = useState(() =>
+    createOwnedGeneration<Options, Model>(globalName, options, readQuota),
+  );
+  // Route actions immediately; activation waits for the retain effect.
+  const currentGenerationRef = useRef(generation);
+  const pendingGenerationRef = useRef<OwnedGeneration<Options, Model> | null>(
+    generation,
   );
 
-  // Unique per mount and per replace(): the owned store must never share with
-  // or be adopted by a sibling — the whole reason this hook exists instead of
-  // useLifecycle. The `<name>:` prefix keeps useGlobalDownloadProgress(name)
-  // matching, since snapshotDownloadProgress tests the prefix boundary.
-  const key = `${globalName}:#${token}`;
+  // A replacement can be selected synchronously and then never commit because
+  // the component unmounts. It has not started, so cancel its activation waiters
+  // without needing store teardown or registry cleanup.
+  useEffect(
+    () => () => {
+      pendingGenerationRef.current?.cancelActivation(
+        abortError("language model reset interrupted by unmount"),
+      );
+    },
+    [],
+  );
 
-  // Kept current in the retain effect so the stable prepare/acquire below
-  // always dispatch to the live store — mirrors useLifecycle. There's no
-  // adoption race here (unique key ⇒ retain always keeps our candidate), so a
-  // committed-key swap isn't needed.
-  const storeRef = useRef(store);
   useEffect(() => {
-    retain(key, store);
-    storeRef.current = store;
-    return () => release(key);
-    // `store` moves in lockstep with `key` — replace() sets both together — so
-    // keying on `key` alone retains/releases exactly once per generation.
+    retain(generation.key, generation.store);
+    if (pendingGenerationRef.current === generation) {
+      pendingGenerationRef.current = null;
+    }
+    generation.activate();
+    return () => release(generation.key);
+    // Each generation owns one immutable key/store pair, so the effect retains
+    // and releases exactly once per committed reset.
     // StrictMode's double-effect releases then re-retains the same candidate,
     // re-running start() (the start-after-stop path task hooks already cover).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [generation]);
 
   const [stable] = useState(() => ({
-    prepare: (): Promise<void> => storeRef.current.prepare(),
-    acquire: (callerSignal?: AbortSignal) =>
-      storeRef.current.acquire(callerSignal),
+    prepare: async (): Promise<void> => {
+      const selected = currentGenerationRef.current;
+      await selected.waitForActivation();
+      return selected.store.prepare();
+    },
+    acquire: async (callerSignal?: AbortSignal) => {
+      const selected = currentGenerationRef.current;
+      await selected.waitForActivation(callerSignal);
+      return selected.store.acquire(callerSignal);
+    },
     replace: (nextOptions?: Options): void => {
       if (nextOptions !== undefined) {
         optionsRef.current = nextOptions;
       }
-      // A fresh store under a fresh key. The old key's release (the retain
-      // effect's cleanup, run before the new key's retain) stops the old
-      // store — aborting its in-flight work and destroying the session — so
-      // the new store probes and provisions from scratch.
-      setStore(
-        createStore<Options, Model>(globalName, optionsRef.current, readQuota),
+
+      const replacement = createOwnedGeneration<Options, Model>(
+        globalName,
+        optionsRef.current,
+        readQuota,
       );
-      setToken(nextToken++);
+      // Cancel an uncommitted replacement, then route to the newest one.
+      currentGenerationRef.current.cancelActivation(
+        abortError("language model reset superseded by a newer reset"),
+      );
+      currentGenerationRef.current = replacement;
+      pendingGenerationRef.current = replacement;
+      setGeneration(replacement);
     },
   }));
 
   const snapshot = useSyncExternalStore(
-    store.subscribe,
-    store.getSnapshot,
-    store.getSnapshot,
+    generation.store.subscribe,
+    generation.store.getSnapshot,
+    generation.store.getSnapshot,
   );
 
   return {
