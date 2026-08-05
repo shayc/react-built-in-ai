@@ -7,7 +7,6 @@ import type { BuiltInAIName } from "../../is-supported";
 import { hasUserActivation } from "../user-activation";
 import {
   beginExternalDownload,
-  buildKey,
   endExternalDownload,
   updateExternalDownload,
 } from "./registry";
@@ -103,9 +102,7 @@ export async function provisionStandalone<
   }
 
   const willDownload = availability !== "available";
-  const token = willDownload
-    ? beginExternalDownload(buildKey(globalName, options))
-    : null;
+  const token = willDownload ? beginExternalDownload(globalName) : null;
   try {
     return await provisionInstance<Options, Model>({
       namespace,

@@ -13,6 +13,19 @@ interface TestOptions {
   mode?: string;
 }
 
+interface LanguageModelLikeOptions {
+  initialPrompts?: {
+    role: string;
+    content: { type: string; value: Uint8Array }[];
+  }[];
+  tools?: {
+    name: string;
+    description: string;
+    inputSchema: object;
+    execute: () => Promise<string>;
+  }[];
+}
+
 interface TestInstance {
   destroy: () => void;
   marker?: string;
@@ -338,6 +351,68 @@ describe("provisionStandalone", () => {
     await pending;
 
     expect(snapshotDownloadProgress([NAMESPACE])).toBeNull();
+  });
+
+  test("does not serialize cyclic tool schemas for download tracking", async () => {
+    const inputSchema: Record<string, unknown> = {};
+    inputSchema.self = inputSchema;
+    const options: LanguageModelLikeOptions = {
+      tools: [
+        {
+          name: "cyclic",
+          description: "A tool with a cyclic schema",
+          inputSchema,
+          execute: () => Promise.resolve("done"),
+        },
+      ],
+    };
+    const create = vi.fn(() =>
+      Promise.resolve<TestInstance>({ destroy: vi.fn() }),
+    );
+    vi.stubGlobal(NAMESPACE, {
+      availability: vi.fn(() => Promise.resolve("downloading")),
+      create,
+    });
+
+    await expect(
+      provisionStandalone<LanguageModelLikeOptions, TestInstance>(
+        NAMESPACE,
+        options,
+      ),
+    ).resolves.toBeTruthy();
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  test("does not serialize large typed-array media for download tracking", async () => {
+    const media = new Uint8Array(1024 * 1024);
+    const toJSON = vi.fn(() => {
+      throw new Error("download tracking must not serialize media");
+    });
+    Object.defineProperty(media, "toJSON", { value: toJSON });
+    const options: LanguageModelLikeOptions = {
+      initialPrompts: [
+        {
+          role: "user",
+          content: [{ type: "image", value: media }],
+        },
+      ],
+    };
+    const create = vi.fn(() =>
+      Promise.resolve<TestInstance>({ destroy: vi.fn() }),
+    );
+    vi.stubGlobal(NAMESPACE, {
+      availability: vi.fn(() => Promise.resolve("downloading")),
+      create,
+    });
+
+    await expect(
+      provisionStandalone<LanguageModelLikeOptions, TestInstance>(
+        NAMESPACE,
+        options,
+      ),
+    ).resolves.toBeTruthy();
+    expect(toJSON).not.toHaveBeenCalled();
+    expect(create).toHaveBeenCalledTimes(1);
   });
 
   test("does not affect download progress reported for other namespaces", async () => {
