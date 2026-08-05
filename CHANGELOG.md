@@ -1,5 +1,13 @@
 # @shayc/react-built-in-ai
 
+## 0.11.5
+
+### Patch Changes
+
+- 52ab54e: Make `useLanguageModel.reset()` an atomic action boundary so immediate `prompt()` and `prepare()` calls wait for the replacement session instead of reaching the discarded conversation.
+- 3abab9e: Avoid serializing imperative creator options when tracking model download progress, allowing large media buffers and cyclic tool schemas to reach the browser unchanged.
+- 502a0aa: Improve lifecycle and cancellation internals by reliably detaching abort listeners, simplifying model provisioning, and removing redundant lifecycle paths without changing the public API.
+
 ## 0.11.4
 
 ### Patch Changes
