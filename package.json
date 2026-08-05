@@ -1,6 +1,6 @@
 {
   "name": "@shayc/react-built-in-ai",
-  "version": "0.11.4",
+  "version": "0.11.5",
   "description": "React hooks for the browser's built-in AI APIs (Translator, Summarizer, Writer, Rewriter, Proofreader, Language Detector, Prompt) — on-device models, no API key, no server.",
   "license": "MIT",
   "author": "Shay Cojocaru <shayc@outlook.com>",
