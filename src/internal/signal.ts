@@ -8,12 +8,12 @@ export function abortError(reason?: unknown): DOMException {
 }
 
 export function mergeSignals(
-  ...signals: readonly (AbortSignal | undefined)[]
+  primary: AbortSignal,
+  secondary?: AbortSignal,
 ): AbortSignal {
-  const present = signals.filter((s) => s instanceof AbortSignal);
-  // A single signal passes through untouched, preserving its abort reason
-  // verbatim; zero signals yields AbortSignal.any([]), which never aborts.
-  return present.length === 1 ? present[0] : AbortSignal.any(present);
+  return secondary === undefined
+    ? primary
+    : AbortSignal.any([primary, secondary]);
 }
 
 export function raceAbort<T>(
@@ -33,22 +33,11 @@ export function raceAbort<T>(
     signal: cleanup.signal,
   });
 
-  promise.then(
-    (value) => {
-      cleanup.abort();
-      resolve(value);
-    },
-    (error: unknown) => {
-      cleanup.abort();
-      // The promise's own rejection is a genuine failure, not a cancellation:
-      // pass it through verbatim (mirroring the resolve path above), so a
-      // thrown non-Error isn't misclassified as an AbortError. Only the abort
-      // paths route through toError, where coercing to AbortError is correct.
-      reject(error);
-    },
-  );
+  // The promise's own rejection is a genuine failure, not a cancellation, so
+  // forward both outcomes verbatim. Only the abort paths route through toError.
+  promise.then(resolve, reject);
 
-  return result;
+  return result.finally(() => cleanup.abort());
 }
 
 // Coerces an abort *reason* to an Error, defaulting a non-Error reason to an

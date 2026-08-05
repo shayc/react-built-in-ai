@@ -12,9 +12,9 @@ interface OwnedGeneration<
 > {
   key: string;
   store: Store<Options, Model>;
-  activate(): void;
-  cancelActivation(reason: unknown): void;
-  waitForActivation(callerSignal?: AbortSignal): Promise<void>;
+  commit(): void;
+  cancelCommit(reason: unknown): void;
+  waitForCommit(callerSignal?: AbortSignal): Promise<void>;
 }
 
 function createOwnedGeneration<
@@ -26,29 +26,29 @@ function createOwnedGeneration<
   readQuota?: (instance: Model) => number,
 ): OwnedGeneration<Options, Model> {
   const store = createStore<Options, Model>(globalName, options, readQuota);
-  const activationController = new AbortController();
-  const { promise: activation, resolve } = Promise.withResolvers<void>();
-  let activated = false;
+  const commitController = new AbortController();
+  const { promise: committed, resolve } = Promise.withResolvers<void>();
+  let isCommitted = false;
 
   return {
     key: `${globalName}:#${nextToken++}`,
     store,
-    activate() {
-      if (activated || activationController.signal.aborted) {
+    commit() {
+      if (isCommitted || commitController.signal.aborted) {
         return;
       }
-      activated = true;
+      isCommitted = true;
       resolve();
     },
-    cancelActivation(reason: unknown) {
-      if (!activated) {
-        activationController.abort(reason);
+    cancelCommit(reason: unknown) {
+      if (!isCommitted) {
+        commitController.abort(reason);
       }
     },
-    waitForActivation(callerSignal?: AbortSignal) {
+    waitForCommit(callerSignal?: AbortSignal) {
       return raceAbort(
-        activation,
-        mergeSignals(activationController.signal, callerSignal),
+        committed,
+        mergeSignals(commitController.signal, callerSignal),
       );
     },
   };
@@ -89,18 +89,18 @@ export function useOwnedLifecycle<
   const [generation, setGeneration] = useState(() =>
     createOwnedGeneration<Options, Model>(globalName, options, readQuota),
   );
-  // Route actions immediately; activation waits for the retain effect.
+  // Route actions immediately; execution waits for the retain effect to commit.
   const currentGenerationRef = useRef(generation);
   const pendingGenerationRef = useRef<OwnedGeneration<Options, Model> | null>(
     generation,
   );
 
   // A replacement can be selected synchronously and then never commit because
-  // the component unmounts. It has not started, so cancel its activation waiters
+  // the component unmounts. It has not started, so cancel its commit waiters
   // without needing store teardown or registry cleanup.
   useEffect(
     () => () => {
-      pendingGenerationRef.current?.cancelActivation(
+      pendingGenerationRef.current?.cancelCommit(
         abortError("language model reset interrupted by unmount"),
       );
     },
@@ -112,7 +112,7 @@ export function useOwnedLifecycle<
     if (pendingGenerationRef.current === generation) {
       pendingGenerationRef.current = null;
     }
-    generation.activate();
+    generation.commit();
     return () => release(generation.key);
     // Each generation owns one immutable key/store pair, so the effect retains
     // and releases exactly once per committed reset.
@@ -123,12 +123,12 @@ export function useOwnedLifecycle<
   const [stable] = useState(() => ({
     prepare: async (): Promise<void> => {
       const selected = currentGenerationRef.current;
-      await selected.waitForActivation();
+      await selected.waitForCommit();
       return selected.store.prepare();
     },
     acquire: async (callerSignal?: AbortSignal) => {
       const selected = currentGenerationRef.current;
-      await selected.waitForActivation(callerSignal);
+      await selected.waitForCommit(callerSignal);
       return selected.store.acquire(callerSignal);
     },
     replace: (nextOptions?: Options): void => {
@@ -142,7 +142,7 @@ export function useOwnedLifecycle<
         readQuota,
       );
       // Cancel an uncommitted replacement, then route to the newest one.
-      currentGenerationRef.current.cancelActivation(
+      currentGenerationRef.current.cancelCommit(
         abortError("language model reset superseded by a newer reset"),
       );
       currentGenerationRef.current = replacement;

@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2025",
-    "lib": ["ES2025", "ESNext.Disposable", "DOM"],
+    "lib": ["ES2025", "ESNext.Array", "ESNext.Disposable", "DOM"],
     "module": "preserve",
     "moduleResolution": "bundler",
     "types": ["dom-chromium-ai"],
