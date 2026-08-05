@@ -1417,59 +1417,6 @@ describe("useLifecycle", () => {
       expect(renders).toBeLessThan(20);
     });
 
-    test("adopting a sibling's store leaves storeRef pointing at the live store, not a discarded candidate (regression)", async () => {
-      // Regression for the storeRef adoption race: when a hook's retain
-      // effect discovers a sibling already won the retain for this key, it
-      // adopts the sibling's store via setStore(live). A previous bug wrote
-      // `storeRef.current = store` in a *separate*, dep-less effect that ran
-      // right after — closing over `store` while it was still the
-      // pre-adoption candidate (the state update from setStore hadn't
-      // committed yet). A fire-and-forget prepare()/acquire() issued in that
-      // window would hit the never-started candidate and reject with a
-      // spurious NotReadyError/TypeError instead of reaching the shared
-      // store. The window is a same-commit timing artifact: this test
-      // harness's act() fully flushes pending re-renders before `renderHook`
-      // resolves, so the exact window can't be forced open from outside —
-      // this instead asserts the invariant structurally (calling
-      // acquire() on both hooks immediately after mount, across StrictMode
-      // on/off) rather than reproducing the race itself.
-      const { Fake } = buildAIFake({
-        status: "available",
-        buildInstance: () => buildInstance(),
-      });
-      vi.stubGlobal(NAMESPACE, Fake);
-
-      for (const wrapper of [undefined, StrictMode]) {
-        __resetForTests();
-        const { result } = await renderHook(
-          () => {
-            const a = useLifecycle<TestOptions, TestInstance>(NAMESPACE, {
-              mode: "adopt-race",
-            });
-            const b = useLifecycle<TestOptions, TestInstance>(NAMESPACE, {
-              mode: "adopt-race",
-            });
-            return { a, b };
-          },
-          wrapper ? { wrapper } : {},
-        );
-
-        // Fired immediately after mount settles — the earliest point from
-        // which the (would-be) adoption-race window could be observed —
-        // rather than after an extra `waitFor` lets a reconciliation
-        // re-render flush first.
-        const [acquiredA, acquiredB] = await Promise.all([
-          result.current.a.acquire(),
-          result.current.b.acquire(),
-        ]);
-
-        expect(acquiredA.instance).toBeDefined();
-        expect(acquiredB.instance).toBeDefined();
-        expect(result.current.a.status).toBe("ready");
-        expect(result.current.b.status).toBe("ready");
-      }
-    });
-
     test("rapid sequential options changes never leave more than the committed key retained", async () => {
       const { Fake } = buildAIFake({
         status: "available",

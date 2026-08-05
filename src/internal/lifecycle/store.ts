@@ -12,20 +12,16 @@ import { hasUserActivation } from "../user-activation";
 import { provisionInstance } from "./provision";
 import { getNamespace, type AINamespace } from "./types";
 
-export interface Snapshot {
+interface Snapshot {
   status: Status;
   progress: number | null;
   error: BuiltInAIError | null;
   inputQuota: number;
 }
 
-export interface Acquired<Model> {
+interface Acquired<Model> {
   instance: Model;
   signal: AbortSignal;
-}
-
-interface ProvisionOptions {
-  reportDownloading: boolean;
 }
 
 type InternalState<Model> =
@@ -75,10 +71,7 @@ function toBuiltInAIError(error: unknown): BuiltInAIError {
   );
 }
 
-function destroyQuietly(instance: DestroyableModel | null | undefined): void {
-  if (!instance) {
-    return;
-  }
+function destroyQuietly(instance: DestroyableModel): void {
   try {
     instance.destroy();
   } catch {
@@ -152,14 +145,14 @@ export function createStore<
         return;
       }
       if (availability === "available") {
-        await provision(signal, { reportDownloading: false }, availability);
+        await provision(signal, availability);
         return;
       }
       if (availability === "downloading") {
         // Join gesture-free: the probe's job is to decide, not to download —
         // don't await, or this promise stays pending for the whole download
         // and pins the store in "checking" the entire time.
-        void provision(signal, { reportDownloading: true }, availability);
+        void provision(signal, availability);
         return;
       }
       // "downloadable": a fetch is needed, and starting one requires a user
@@ -175,11 +168,10 @@ export function createStore<
 
   function provision(
     signal: AbortSignal,
-    { reportDownloading }: ProvisionOptions,
     availability: Availability,
   ): Promise<void> {
     const task = runProvision(signal, availability);
-    if (reportDownloading) {
+    if (availability !== "available") {
       // null, not 0: a number means the browser actually reported this
       // fraction via downloadprogress. A joined download may already be
       // partway done; claiming 0 here would be a fabrication either way.
@@ -264,7 +256,7 @@ export function createStore<
     }
   }
 
-  async function ensureReady(callerSignal?: AbortSignal): Promise<void> {
+  async function ensureReady(callerSignal?: AbortSignal): Promise<Model> {
     // Bounds the "downloadable" case's gesture-less revalidation to one probe
     // per call — without it, availability repeatedly answering "downloadable"
     // would retry forever instead of surfacing MissingUserActivationError.
@@ -273,7 +265,7 @@ export function createStore<
       const current = state;
       switch (current.kind) {
         case "ready":
-          return;
+          return current.instance;
         case "unsupported":
           throw new UnsupportedError();
         case "unavailable":
@@ -322,11 +314,7 @@ export function createStore<
     // "downloadable" case above) pass straight through; a caller that
     // didn't gets MissingUserActivationError from runProvision(), which
     // re-parks at "downloadable" rather than erroring out.
-    void provision(
-      abortController.signal,
-      { reportDownloading: true },
-      "downloadable",
-    );
+    void provision(abortController.signal, "downloadable");
   }
 
   // Called once by the registry when this store is first retained, and
@@ -375,7 +363,7 @@ export function createStore<
     callerSignal?: AbortSignal,
   ): Promise<Acquired<Model>> => {
     const epoch = abortController;
-    await ensureReady(callerSignal);
+    const instance = await ensureReady(callerSignal);
     // start() during the await installs a fresh controller — a different
     // identity means our generation was reset out from under us (only
     // prepare()'s error-retry restarts an already-retained store). The old
@@ -390,11 +378,7 @@ export function createStore<
     if (merged.aborted) {
       throw merged.reason;
     }
-    // Provably "ready" in an unchanged epoch; the guard narrows `state.instance`.
-    if (state.kind !== "ready") {
-      throw new NotReadyError();
-    }
-    return { instance: state.instance, signal: merged };
+    return { instance, signal: merged };
   };
 
   return {

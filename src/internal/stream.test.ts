@@ -1,16 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { streamChunks } from "./stream";
-
-function streamFromChunks(chunks: readonly string[]): ReadableStream<string> {
-  return new ReadableStream<string>({
-    start(controller) {
-      for (const c of chunks) {
-        controller.enqueue(c);
-      }
-      controller.close();
-    },
-  });
-}
+import { buildChunkStream } from "./testing/stream-fake";
 
 async function collect(it: AsyncIterable<string>): Promise<string[]> {
   const out: string[] = [];
@@ -22,7 +12,7 @@ async function collect(it: AsyncIterable<string>): Promise<string[]> {
 
 describe("streamChunks", () => {
   test("yields all chunks from a ReadableStream in order", async () => {
-    const stream = streamFromChunks(["a", "b", "c"]);
+    const stream = buildChunkStream(["a", "b", "c"]);
     const { signal } = new AbortController();
     expect(await collect(streamChunks(stream, signal))).toEqual([
       "a",
@@ -32,7 +22,7 @@ describe("streamChunks", () => {
   });
 
   test("releases the reader lock after the stream drains", async () => {
-    const stream = streamFromChunks(["only"]);
+    const stream = buildChunkStream(["only"]);
     const { signal } = new AbortController();
     await collect(streamChunks(stream, signal));
     expect(stream.locked).toBe(false);
@@ -61,7 +51,7 @@ describe("streamChunks", () => {
   });
 
   test("throws an AbortError when the signal is already aborted on entry", async () => {
-    const stream = streamFromChunks(["a", "b"]);
+    const stream = buildChunkStream(["a", "b"]);
     const controller = new AbortController();
     controller.abort();
 
@@ -73,9 +63,8 @@ describe("streamChunks", () => {
 
   test("cancels the underlying source and releases the lock when the signal aborts mid-stream", async () => {
     // Stream emits one chunk, then hangs in `pull` so the next read is pending at abort.
-    // `cancel` records the reason for assertion; this sentinel stands in until then.
-    const NOT_CANCELLED = Symbol("not-cancelled");
-    let cancelReason: unknown = NOT_CANCELLED;
+    // `cancel` records the reason for assertion.
+    let cancelReason: unknown;
     const stream = new ReadableStream<string>({
       start(controller) {
         controller.enqueue("first");

@@ -28,15 +28,9 @@ describe("abortError", () => {
 });
 
 describe("mergeSignals", () => {
-  test("returns the sole present signal as-is (identity)", () => {
+  test("returns the primary signal as-is when there is no secondary signal", () => {
     const a = new AbortController().signal;
     expect(mergeSignals(a, undefined)).toBe(a);
-    expect(mergeSignals(undefined, a)).toBe(a);
-  });
-
-  test("with no signals returns a non-aborted signal that never aborts on its own", () => {
-    const merged = mergeSignals(undefined, undefined);
-    expect(merged.aborted).toBe(false);
   });
 
   test("aborts when any of the input signals aborts", () => {
@@ -94,23 +88,30 @@ describe("raceAbort", () => {
     await expect(raceAbort(rejected, signal)).rejects.toBe("boom");
   });
 
-  test("aborts its cleanup signal once the promise resolves", async () => {
-    const { signal } = new AbortController();
-    const addSpy = vi.spyOn(signal, "addEventListener");
+  test.each([
+    ["resolves", () => Promise.resolve("ok")],
+    ["rejects", () => Promise.reject(new Error("inner"))],
+  ])(
+    "aborts its cleanup signal once the promise %s",
+    async (_outcome, build) => {
+      const { signal } = new AbortController();
+      const addSpy = vi.spyOn(signal, "addEventListener");
 
-    await raceAbort(Promise.resolve("ok"), signal);
+      await raceAbort(build(), signal).catch(() => undefined);
 
-    const options = addSpy.mock.calls[0]?.[2] as
-      AddEventListenerOptions | undefined;
-    expect(options?.signal?.aborted).toBe(true);
-  });
+      const options = addSpy.mock.calls[0]?.[2] as
+        AddEventListenerOptions | undefined;
+      expect(options?.signal?.aborted).toBe(true);
+    },
+  );
 
-  test("aborts its cleanup signal once the promise rejects", async () => {
-    const { signal } = new AbortController();
-    const addSpy = vi.spyOn(signal, "addEventListener");
-    const inner = new Error("inner");
+  test("aborts its cleanup signal when cancellation wins the race", async () => {
+    const controller = new AbortController();
+    const addSpy = vi.spyOn(controller.signal, "addEventListener");
+    const pending = raceAbort(new Promise(() => undefined), controller.signal);
 
-    await expect(raceAbort(Promise.reject(inner), signal)).rejects.toBe(inner);
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
 
     const options = addSpy.mock.calls[0]?.[2] as
       AddEventListenerOptions | undefined;

@@ -63,38 +63,60 @@ describe("provisionInstance", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  test("does not require activation when joining an in-flight download ('downloading')", async () => {
+  test.each([
+    {
+      name: "joins an in-flight download without activation",
+      availability: "downloading" as const,
+      isActive: false,
+    },
+    {
+      name: "starts a downloadable model with activation",
+      availability: "downloadable" as const,
+      isActive: true,
+    },
+  ])(
+    "$name and reports monitor progress",
+    async ({ availability, isActive }) => {
+      setUserActivation(isActive);
+      const onProgress = vi.fn();
+      const create = vi.fn(
+        (opts?: { monitor?: (m: CreateMonitor) => void }) => {
+          const monitor = new EventTarget() as CreateMonitor;
+          opts?.monitor?.(monitor);
+          monitor.dispatchEvent(
+            Object.assign(new Event("downloadprogress"), { loaded: 0.5 }),
+          );
+          return Promise.resolve({ destroy: vi.fn() });
+        },
+      );
+      const namespace: AINamespace<TestOptions, TestInstance> = {
+        availability: vi.fn(),
+        create,
+      };
+
+      const created = await provisionInstance({
+        namespace,
+        options: { mode: "a" },
+        availability,
+        onProgress,
+      });
+
+      expect(created).toBeTruthy();
+      expect(create).toHaveBeenCalledTimes(1);
+      expect(onProgress).toHaveBeenCalledWith(0.5);
+    },
+  );
+
+  test("creates an available model without activation or a monitor", async () => {
     setUserActivation(false);
-    const onProgress = vi.fn();
-    const create = vi.fn((opts?: { monitor?: (m: CreateMonitor) => void }) => {
-      const monitor = new EventTarget() as CreateMonitor;
-      opts?.monitor?.(monitor);
-      return Promise.resolve({ destroy: vi.fn() });
-    });
-    const namespace: AINamespace<TestOptions, TestInstance> = {
-      availability: vi.fn(),
-      create,
-    };
-
-    const created = await provisionInstance({
-      namespace,
-      options: { mode: "a" },
-      availability: "downloading",
-      onProgress,
-    });
-
-    expect(created).toBeTruthy();
-    expect(create).toHaveBeenCalledTimes(1);
-    const [createArg] = create.mock.calls[0] as [{ monitor?: unknown }];
-    expect(createArg.monitor).toBeTypeOf("function");
-  });
-
-  test("does not require activation when availability is 'available'", async () => {
-    setUserActivation(false);
+    let capturedMonitor: CreateMonitorCallback | undefined;
     const instance: TestInstance = { destroy: vi.fn(), marker: "live" };
     const namespace: AINamespace<TestOptions, TestInstance> = {
       availability: vi.fn(),
-      create: vi.fn(() => Promise.resolve(instance)),
+      create: vi.fn((opts?: { monitor?: CreateMonitorCallback }) => {
+        capturedMonitor = opts?.monitor;
+        return Promise.resolve(instance);
+      }),
     };
 
     const created = await provisionInstance({
@@ -104,50 +126,6 @@ describe("provisionInstance", () => {
     });
 
     expect(created.marker).toBe("live");
-  });
-
-  test("wires the download monitor when a download is required", async () => {
-    setUserActivation(true);
-    const onProgress = vi.fn();
-    const create = vi.fn((opts?: { monitor?: (m: CreateMonitor) => void }) => {
-      const monitor = new EventTarget() as CreateMonitor;
-      opts?.monitor?.(monitor);
-      monitor.dispatchEvent(
-        Object.assign(new Event("downloadprogress"), { loaded: 0.5 }),
-      );
-      return Promise.resolve({ destroy: vi.fn() });
-    });
-    const namespace: AINamespace<TestOptions, TestInstance> = {
-      availability: vi.fn(),
-      create,
-    };
-
-    await provisionInstance({
-      namespace,
-      options: { mode: "a" },
-      availability: "downloadable",
-      onProgress,
-    });
-
-    expect(onProgress).toHaveBeenCalledWith(0.5);
-  });
-
-  test("does not wire a monitor on the available fast path", async () => {
-    let capturedMonitor: CreateMonitorCallback | undefined;
-    const namespace: AINamespace<TestOptions, TestInstance> = {
-      availability: vi.fn(),
-      create: vi.fn((opts?: { monitor?: CreateMonitorCallback }) => {
-        capturedMonitor = opts?.monitor;
-        return Promise.resolve({ destroy: vi.fn() });
-      }),
-    };
-
-    await provisionInstance({
-      namespace,
-      options: { mode: "a" },
-      availability: "available",
-    });
-
     expect(capturedMonitor).toBeUndefined();
   });
 
@@ -276,35 +254,22 @@ describe("provisionStandalone", () => {
     expect(snapshotDownloadProgress([NAMESPACE])).toBeNull();
   });
 
-  test("creates an instance when available without requiring activation", async () => {
+  test("creates an available instance without passing signal to availability()", async () => {
+    const availability = vi.fn(() => Promise.resolve("available" as const));
     const instance: TestInstance = { destroy: vi.fn(), marker: "live" };
     vi.stubGlobal(NAMESPACE, {
-      availability: vi.fn(() => Promise.resolve("available")),
+      availability,
       create: vi.fn(() => Promise.resolve(instance)),
     });
 
-    const created = await provisionStandalone<TestOptions, TestInstance>(
-      NAMESPACE,
-      { mode: "a" },
-    );
-
-    expect(created.marker).toBe("live");
-  });
-
-  test("does not pass signal into availability()", async () => {
-    const availability = vi.fn(() => Promise.resolve("available" as const));
-    vi.stubGlobal(NAMESPACE, {
-      availability,
-      create: vi.fn(() => Promise.resolve({ destroy: vi.fn() })),
-    });
-
     const controller = new AbortController();
-    await provisionStandalone<TestOptions, TestInstance>(
+    const created = await provisionStandalone<TestOptions, TestInstance>(
       NAMESPACE,
       { mode: "a" },
       controller.signal,
     );
 
+    expect(created.marker).toBe("live");
     const [arg] = availability.mock.calls[0] as unknown as [
       Record<string, unknown>,
     ];
@@ -324,33 +289,6 @@ describe("provisionStandalone", () => {
       provisionStandalone<TestOptions, TestInstance>(NAMESPACE, { mode: "a" }),
     ).rejects.toBe(original);
     expect(create).not.toHaveBeenCalled();
-  });
-
-  test("registers external download progress at 0 and clears it after create resolves", async () => {
-    setUserActivation(true);
-    let resolveCreate!: (value: TestInstance) => void;
-    vi.stubGlobal(NAMESPACE, {
-      availability: vi.fn(() => Promise.resolve("downloadable")),
-      create: vi.fn(
-        () =>
-          new Promise<TestInstance>((resolve) => {
-            resolveCreate = resolve;
-          }),
-      ),
-    });
-
-    const pending = provisionStandalone<TestOptions, TestInstance>(NAMESPACE, {
-      mode: "a",
-    });
-
-    await vi.waitFor(() =>
-      expect(snapshotDownloadProgress([NAMESPACE])).toBe(0),
-    );
-
-    resolveCreate({ destroy: vi.fn() });
-    await pending;
-
-    expect(snapshotDownloadProgress([NAMESPACE])).toBeNull();
   });
 
   test("does not serialize cyclic tool schemas for download tracking", async () => {

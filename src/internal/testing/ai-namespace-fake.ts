@@ -1,13 +1,12 @@
 import { vi, type Mock } from "vitest";
 
-export interface AIFake<I> {
+interface AIFake<I> {
   Fake: { availability: Mock; create: Mock };
-  availability: Mock;
   create: Mock;
   instances: I[];
 }
 
-export interface BuildAIFakeOptions<I> {
+interface BuildAIFakeOptions<I> {
   status?: Availability;
   buildInstance: () => I;
   failCreate?: Error;
@@ -36,7 +35,6 @@ export function buildAIFake<I>({
   });
   return {
     Fake: { availability, create },
-    availability,
     create,
     instances,
   };

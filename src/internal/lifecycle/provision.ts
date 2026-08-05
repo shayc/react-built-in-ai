@@ -13,7 +13,7 @@ import {
 import { getNamespace, type AINamespace } from "./types";
 
 /** @internal */
-export interface ProvisionInstanceOptions<
+interface ProvisionInstanceOptions<
   Options extends object,
   Model extends DestroyableModel,
 > {
