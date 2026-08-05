@@ -212,11 +212,7 @@ export function createStore<
       if (signal.aborted) {
         return;
       }
-      if (error instanceof UnsupportedError) {
-        transition({ kind: "unsupported" });
-      } else if (error instanceof UnavailableError) {
-        transition({ kind: "unavailable" });
-      } else if (error instanceof MissingUserActivationError) {
+      if (error instanceof MissingUserActivationError) {
         // beginDownload() doesn't gate on activation itself — provisionInstance()
         // is the actual gate, reached only when a caller drove provisioning
         // without one. Re-park rather than surface as a hard error.
