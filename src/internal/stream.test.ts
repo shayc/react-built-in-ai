@@ -2,19 +2,11 @@ import { describe, expect, test } from "vitest";
 import { streamChunks } from "./stream";
 import { buildChunkStream } from "./testing/stream-fake";
 
-async function collect(it: AsyncIterable<string>): Promise<string[]> {
-  const out: string[] = [];
-  for await (const chunk of it) {
-    out.push(chunk);
-  }
-  return out;
-}
-
 describe("streamChunks", () => {
   test("yields all chunks from a ReadableStream in order", async () => {
     const stream = buildChunkStream(["a", "b", "c"]);
     const { signal } = new AbortController();
-    expect(await collect(streamChunks(stream, signal))).toEqual([
+    expect(await Array.fromAsync(streamChunks(stream, signal))).toEqual([
       "a",
       "b",
       "c",
@@ -24,7 +16,7 @@ describe("streamChunks", () => {
   test("releases the reader lock after the stream drains", async () => {
     const stream = buildChunkStream(["only"]);
     const { signal } = new AbortController();
-    await collect(streamChunks(stream, signal));
+    await Array.fromAsync(streamChunks(stream, signal));
     expect(stream.locked).toBe(false);
   });
 
