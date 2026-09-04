@@ -81,9 +81,6 @@ describe("raceAbort", () => {
     const { signal } = new AbortController();
     // A thrown string is a genuine failure, not a cancellation: it must reach
     // the caller verbatim, not be rewrapped as an AbortError DOMException.
-    // Rejecting with a non-Error is the whole point of the test, so the
-    // prefer-promise-reject-errors lint rule is deliberately suppressed here.
-    // oxlint-disable-next-line typescript/prefer-promise-reject-errors
     const rejected = Promise.reject("boom");
     await expect(raceAbort(rejected, signal)).rejects.toBe("boom");
   });
