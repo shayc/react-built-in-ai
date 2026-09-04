@@ -16,5 +16,6 @@ export function getNamespace<Options, Model extends DestroyableModel>(
   globalName: BuiltInAIName,
 ): AINamespace<Options, Model> | undefined {
   return (globalThis as Record<string, unknown>)[globalName] as
-    AINamespace<Options, Model> | undefined;
+    | AINamespace<Options, Model>
+    | undefined;
 }

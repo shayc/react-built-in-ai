@@ -81,9 +81,6 @@ describe("raceAbort", () => {
     const { signal } = new AbortController();
     // A thrown string is a genuine failure, not a cancellation: it must reach
     // the caller verbatim, not be rewrapped as an AbortError DOMException.
-    // Rejecting with a non-Error is the whole point of the test, so the
-    // prefer-promise-reject-errors lint rule is deliberately suppressed here.
-    // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
     const rejected = Promise.reject("boom");
     await expect(raceAbort(rejected, signal)).rejects.toBe("boom");
   });
@@ -100,7 +97,8 @@ describe("raceAbort", () => {
       await raceAbort(build(), signal).catch(() => undefined);
 
       const options = addSpy.mock.calls[0]?.[2] as
-        AddEventListenerOptions | undefined;
+        | AddEventListenerOptions
+        | undefined;
       expect(options?.signal?.aborted).toBe(true);
     },
   );
@@ -114,7 +112,8 @@ describe("raceAbort", () => {
     await expect(pending).rejects.toMatchObject({ name: "AbortError" });
 
     const options = addSpy.mock.calls[0]?.[2] as
-      AddEventListenerOptions | undefined;
+      | AddEventListenerOptions
+      | undefined;
     expect(options?.signal?.aborted).toBe(true);
   });
 });
