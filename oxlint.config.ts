@@ -1,18 +1,19 @@
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["eslint", "typescript", "oxc", "react"],
-  "categories": {
-    "correctness": "error"
+import { defineConfig } from "oxlint";
+
+export default defineConfig({
+  plugins: ["eslint", "typescript", "oxc", "react"],
+  categories: {
+    correctness: "error",
   },
-  "options": {
-    "typeAware": true,
-    "reportUnusedDisableDirectives": "error"
+  options: {
+    typeAware: true,
+    reportUnusedDisableDirectives: "error",
   },
-  "env": {
-    "browser": true
+  env: {
+    browser: true,
   },
-  "ignorePatterns": ["dist/**", "coverage/**"],
-  "rules": {
+  ignorePatterns: ["dist/**", "coverage/**"],
+  rules: {
     "react/rules-of-hooks": "error",
     "typescript/ban-ts-comment": "error",
     "typescript/no-explicit-any": "error",
@@ -23,6 +24,6 @@
     "typescript/no-unsafe-call": "error",
     "typescript/no-unsafe-member-access": "error",
     "typescript/no-unsafe-return": "error",
-    "typescript/only-throw-error": "error"
-  }
-}
+    "typescript/only-throw-error": "error",
+  },
+});
