@@ -15,7 +15,7 @@ Open an issue at [github.com/shayc/react-built-in-ai/issues](https://github.com/
 
 ## Development
 
-Requires Node 22+.
+Requires Node 22.12+.
 
 ```bash
 npm ci
