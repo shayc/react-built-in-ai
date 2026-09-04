@@ -1363,12 +1363,16 @@ describe("useLifecycle", () => {
       } = {};
 
       function ChildA(): null {
+        // Test instrumentation intentionally captures the rendered hook value.
+        // oxlint-disable-next-line react/immutability
         captured.a = useLifecycle<TestOptions, TestInstance>(NAMESPACE, {
           mode: "resurrect-same-commit",
         });
         return null;
       }
       function ChildB(): null {
+        // Test instrumentation intentionally captures the rendered hook value.
+        // oxlint-disable-next-line react/immutability
         captured.b = useLifecycle<TestOptions, TestInstance>(NAMESPACE, {
           mode: "resurrect-same-commit",
         });

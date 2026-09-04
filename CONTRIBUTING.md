@@ -32,8 +32,8 @@ Individual commands:
 
 ```bash
 npm run dev            # rebuild dist/ while source files change
-npm run format:check   # verify Prettier formatting
-npm run lint           # eslint
+npm run format:check   # verify Oxfmt formatting
+npm run lint           # Oxlint
 npm run typecheck      # type-check only (noEmit via tsconfig)
 npm test               # vitest run (browser mode, chromium)
 npm run test:coverage  # vitest run with V8 coverage + threshold gate

@@ -65,14 +65,13 @@ export function useLifecycle<
       // a concurrent render or interleaved release can invalidate, so the
       // effect must reconcile), not the props-mirroring pattern the
       // set-state-in-effect rule warns about.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStore(live);
     }
     return () => release(key);
     // `store` is intentionally omitted: this effect's job is to retain/
     // release exactly once per key generation, not to re-run when the
     // reconciliation above swaps `store` to the sibling's instance.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps
   }, [key]);
 
   const [stable] = useState(() => ({

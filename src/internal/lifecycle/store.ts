@@ -19,7 +19,7 @@ interface Snapshot {
   inputQuota: number;
 }
 
-interface Acquired<Model> {
+export interface Acquired<Model> {
   instance: Model;
   signal: AbortSignal;
 }
