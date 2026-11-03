@@ -53,7 +53,7 @@
     "release": "changeset publish"
   },
   "dependencies": {
-    "@types/dom-chromium-ai": "^0.0.17"
+    "@types/dom-chromium-ai": "^0.0.18"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0"
