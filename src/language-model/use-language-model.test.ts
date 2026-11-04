@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { renderHook } from "vitest-browser-react";
 import {
@@ -97,6 +98,42 @@ describe("useLanguageModel", () => {
 
     await vi.waitFor(() => expect(result.current.status).toBe("ready"));
     await vi.waitFor(() => expect(result.current.contextUsage).toBe(42));
+  });
+
+  test("a reset racing the ready-time sync never resurrects the old session's usage", async () => {
+    let calls = 0;
+    vi.stubGlobal("LanguageModel", {
+      availability: vi.fn(() => Promise.resolve("available")),
+      create: vi.fn(() => {
+        calls += 1;
+        if (calls > 1) {
+          return Promise.reject(new Error("second create fails"));
+        }
+        return Promise.resolve(
+          Object.defineProperty(buildLanguageModelInstance(), "contextUsage", {
+            get: () => 42,
+          }),
+        );
+      }),
+    });
+
+    let didReset = false;
+    const { result } = await renderHook(() => {
+      const lm = useLanguageModel();
+      // Resets in the same commit the session becomes ready, before the
+      // hook's own ready-time sync has resolved.
+      useEffect(() => {
+        if (lm.status === "ready" && !didReset) {
+          didReset = true;
+          lm.reset();
+        }
+      }, [lm]);
+      return lm;
+    });
+
+    await vi.waitFor(() => expect(result.current.status).toBe("error"));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(result.current.contextUsage).toBe(0);
   });
 
   test("isolation: equal options give each mount its own session", async () => {

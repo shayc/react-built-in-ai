@@ -150,6 +150,10 @@ export function useLanguageModel(
   // finally from an aborted in-flight call, an already-queued overflow
   // event — can write over the fresh session's zeros.
   const listenedInstance = useRef<LanguageModel | null>(null);
+  // Bumped by reset(). The ready-time sync awaits acquire(), so a reset that
+  // lands in between (e.g. from a sibling effect reacting to "ready") would
+  // otherwise let it re-point listenedInstance at the discarded session.
+  const resetCount = useRef(0);
 
   const [{ actions, syncReadySession }] = useState(() => {
     function ensureOverflowListener(instance: LanguageModel): void {
@@ -182,7 +186,11 @@ export function useLanguageModel(
     // reporting 0 until the first action. Also wires the overflow listener
     // early, so the ref-based currency guards apply from the start.
     async function syncReadySession(signal: AbortSignal): Promise<void> {
+      const generation = resetCount.current;
       const { instance } = await acquire(signal);
+      if (resetCount.current !== generation) {
+        return;
+      }
       ensureOverflowListener(instance);
       syncUsage(instance);
     }
@@ -233,6 +241,7 @@ export function useLanguageModel(
         // re-attaches the overflow listener to the fresh session) and arms
         // the currency guards above against the old session's late writes.
         listenedInstance.current = null;
+        resetCount.current += 1;
         setContextUsage(0);
         setOverflowCount(0);
         replace(nextOptions);
