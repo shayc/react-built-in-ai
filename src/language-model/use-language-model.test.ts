@@ -82,6 +82,23 @@ describe("useLanguageModel", () => {
     expect(result.current.overflowCount).toBe(0);
   });
 
+  test("reports initialPrompts usage as soon as the session is ready", async () => {
+    const { Fake } = buildAIFake({
+      buildInstance: () =>
+        Object.defineProperty(buildLanguageModelInstance(), "contextUsage", {
+          get: () => 42,
+        }),
+    });
+    vi.stubGlobal("LanguageModel", Fake);
+
+    const { result } = await renderHook(() =>
+      useLanguageModel(system("be brief")),
+    );
+
+    await vi.waitFor(() => expect(result.current.status).toBe("ready"));
+    await vi.waitFor(() => expect(result.current.contextUsage).toBe(42));
+  });
+
   test("isolation: equal options give each mount its own session", async () => {
     const { Fake, create, instances } = buildAIFake<LMInstance>({
       buildInstance: buildLanguageModelInstance,

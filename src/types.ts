@@ -45,8 +45,8 @@ export interface BaseHookReturn {
    * gesture. From `error` state it resets the failed lifecycle and re-probes,
    * so it doubles as the recovery/retry path.
    *
-   * Hooks with equal options share one underlying instance (see the
-   * "Instance sharing" section of the README) — `prepare()` restarts that
+   * Hooks with equal options share one underlying instance (see "Sharing
+   * and option changes" in `docs/lifecycle.md`) — `prepare()` restarts that
    * shared instance, so a retry from one component is visible to every
    * component sharing it, and aborts any sibling's in-flight action call or
    * `prepare()`/gate resolution.

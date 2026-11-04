@@ -33,4 +33,19 @@ describe("buildKey", () => {
     // serializes the same as {} — both must collapse to the bare name.
     expect(buildKey("Summarizer", { foo: undefined })).toBe("Summarizer");
   });
+
+  test("sorts nested object keys but preserves array order", () => {
+    const a = buildKey("Summarizer", {
+      expectedInputs: [{ type: "text", languages: ["en", "fr"] }],
+    });
+    const b = buildKey("Summarizer", {
+      expectedInputs: [{ languages: ["en", "fr"], type: "text" }],
+    });
+    expect(a).toBe(b);
+    expect(
+      buildKey("Summarizer", {
+        expectedInputs: [{ type: "text", languages: ["fr", "en"] }],
+      }),
+    ).not.toBe(a);
+  });
 });

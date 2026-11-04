@@ -25,7 +25,7 @@ The six task hooks share a module-level lifecycle store when both of these match
 - Built-in AI namespace
 - Options by value
 
-Option object keys are sorted before JSON encoding, and properties whose value is `undefined` are ignored. Fresh inline objects and arrays with the same content therefore select the same store; no `useMemo` is required.
+Option object keys are sorted at every depth before JSON encoding, and properties whose value is `undefined` are ignored. Fresh inline objects and arrays with the same content therefore select the same store; no `useMemo` is required.
 
 Matching mounts observe the same `status`, `progress`, `error`, and browser instance. When task-hook options change:
 

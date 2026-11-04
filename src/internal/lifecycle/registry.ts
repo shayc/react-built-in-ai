@@ -15,11 +15,31 @@ interface Entry {
 
 const entries = new Map<string, Entry>();
 
+// JSON.stringify replacer that re-emits every plain object with its keys
+// sorted, at any depth (e.g. `expectedInputs: [{ type, languages }]`). Arrays
+// keep their order — element order is meaningful in the options IDL.
+function sortObjectKeys(_key: string, value: unknown): unknown {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype
+  ) {
+    return value;
+  }
+  const record = value as Record<string, unknown>;
+  return Object.fromEntries(
+    Object.keys(record)
+      .sort()
+      .map((k) => [k, record[k]]),
+  );
+}
+
 /**
  * Canonical identity for a (namespace, options) pair — hooks with equal
- * options share one store. Keys are sorted before JSON encoding so
- * insertion order doesn't split the same logical options into separate
- * entries.
+ * options share one store. Object keys are sorted at every depth before JSON
+ * encoding so insertion order doesn't split the same logical options into
+ * separate entries.
  *
  * @internal
  */
@@ -30,11 +50,7 @@ export function buildKey(
   if (!options) {
     return globalName;
   }
-  const keys = Object.keys(options).sort();
-  const ordered = Object.fromEntries(
-    keys.map((k) => [k, (options as Record<string, unknown>)[k]]),
-  );
-  const json = JSON.stringify(ordered);
+  const json = JSON.stringify(options, sortObjectKeys);
   // JSON.stringify drops undefined-valued props, so an options object made
   // entirely of them (e.g. `{ foo: undefined }`) serializes to "{}" — the
   // same as an empty object. Collapse both to the bare name so they share

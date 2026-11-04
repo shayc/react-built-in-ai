@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useOwnedLifecycle } from "../internal/lifecycle/use-owned-lifecycle";
 import { streamChunks } from "../internal/stream";
 import type { BaseHookReturn } from "../types";
@@ -151,7 +151,7 @@ export function useLanguageModel(
   // event — can write over the fresh session's zeros.
   const listenedInstance = useRef<LanguageModel | null>(null);
 
-  const [actions] = useState(() => {
+  const [{ actions, syncReadySession }] = useState(() => {
     function ensureOverflowListener(instance: LanguageModel): void {
       if (listenedInstance.current === instance) {
         return;
@@ -177,7 +177,16 @@ export function useLanguageModel(
         setContextUsage(instance.contextUsage);
       }
     }
-    return {
+    // A fresh session may already be using context — `initialPrompts` are
+    // prefilled by create() — so read usage as soon as it's ready rather than
+    // reporting 0 until the first action. Also wires the overflow listener
+    // early, so the ref-based currency guards apply from the start.
+    async function syncReadySession(signal: AbortSignal): Promise<void> {
+      const { instance } = await acquire(signal);
+      ensureOverflowListener(instance);
+      syncUsage(instance);
+    }
+    const actions = {
       async prompt(input: LanguageModelPrompt, opts?: PromptCallOptions) {
         const { instance, signal } = await acquire(opts?.signal);
         ensureOverflowListener(instance);
@@ -229,7 +238,19 @@ export function useLanguageModel(
         replace(nextOptions);
       },
     };
+    return { actions, syncReadySession };
   });
+
+  useEffect(() => {
+    if (status !== "ready") {
+      return;
+    }
+    // Aborted when status leaves "ready" (reset, unmount), so a sync that
+    // would otherwise route to a replacement session is cancelled instead.
+    const controller = new AbortController();
+    syncReadySession(controller.signal).catch(() => undefined);
+    return () => controller.abort();
+  }, [status, syncReadySession]);
 
   return {
     status,
