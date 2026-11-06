@@ -1,5 +1,11 @@
 # @shayc/react-built-in-ai
 
+## 0.11.6
+
+### Patch Changes
+
+- 76cc6ee: Update `@types/dom-chromium-ai` to 0.0.18, which adds the `"slightly-predictable"` and `"slightly-creative"` values to `samplingMode` in `useLanguageModel` and `createLanguageModel` options.
+
 ## 0.11.5
 
 ### Patch Changes
