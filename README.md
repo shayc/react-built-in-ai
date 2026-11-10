@@ -193,7 +193,7 @@ async function translate(
 
 - Creators accept the hook options plus `signal` and `onDownloadProgress`, and return the raw browser instance as `AsyncDisposable`. On older toolchains, call `.destroy()` in `finally`.
 - They use the same availability, activation, download, and cancellation rules as hooks, but expose no reactive `status`, `error`, or retry method.
-- `onDownloadProgress(progress)` is called only when creating the instance involves a model download: once with `0` as soon as the download is known, then with each new fraction up to `1`. It is never called when the model is already available, nor after the creator's promise settles — so the first call is the moment to flip your own "downloading" state.
+- `onDownloadProgress(progress)` is called only when creating the instance involves a model download: once with `0` as soon as the download is known, then with each new fraction up to `1`. It is never called when the model is already available, when the creator rejects with `MissingUserActivationError` (no download starts), nor after the creator's promise settles — so the first call is the moment to flip your own "downloading" state.
 - They reject with `UnsupportedError`, `UnavailableError`, or `MissingUserActivationError`; other browser rejections such as `AbortError` and `NetworkError` pass through unchanged.
 - Call a creator from a user gesture when it may need to start a download. Joining a download already in flight does not require another gesture.
 

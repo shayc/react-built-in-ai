@@ -6,7 +6,7 @@ import {
 } from "../../errors";
 import type { BuiltInAIName } from "../../is-supported";
 import { provisionInstance, provisionStandalone } from "./provision";
-import { snapshotDownloadProgress } from "./registry";
+import { snapshotDownloadProgress, subscribeDownloads } from "./registry";
 import type { AINamespace } from "./types";
 
 interface TestOptions {
@@ -230,6 +230,37 @@ describe("provisionStandalone", () => {
       provisionStandalone<TestOptions, TestInstance>(NAMESPACE, { mode: "a" }),
     ).rejects.toBeInstanceOf(MissingUserActivationError);
     expect(create).not.toHaveBeenCalled();
+  });
+
+  test("rejects a downloadable model without a gesture before registering or reporting a download", async () => {
+    setUserActivation(false);
+    vi.stubGlobal(NAMESPACE, {
+      availability: vi.fn(() => Promise.resolve("downloadable")),
+      create: vi.fn(),
+    });
+    const aggregate: (number | null)[] = [];
+    const unsubscribe = subscribeDownloads(() => {
+      aggregate.push(snapshotDownloadProgress([NAMESPACE]));
+    });
+    const onDownloadProgress = vi.fn();
+
+    try {
+      await expect(
+        provisionStandalone<TestOptions, TestInstance>(
+          NAMESPACE,
+          { mode: "a" },
+          undefined,
+          onDownloadProgress,
+        ),
+      ).rejects.toBeInstanceOf(MissingUserActivationError);
+    } finally {
+      unsubscribe();
+    }
+
+    expect(onDownloadProgress).not.toHaveBeenCalled();
+    // No registry notification at all: the aggregate stayed null throughout.
+    expect(aggregate).toEqual([]);
+    expect(snapshotDownloadProgress([NAMESPACE])).toBeNull();
   });
 
   test("joins an in-flight download without a gesture and tracks it as an external download", async () => {
