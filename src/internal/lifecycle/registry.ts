@@ -98,15 +98,15 @@ export function release(key: string): void {
 //    store's own snapshot — no separate bookkeeping, since the store
 //    already tracks its own `progress` while `status === "downloading"`.
 //  - External downloads (imperative `create*` calls, which have no
-//    retained store): tracked in `externalDownloads`, keyed by a unique
-//    token per call rather than by options — so one aborted call among
-//    several identical-options creators can't blank the others' progress
-//    by clearing a key they still share.
+//    retained store): each call owns one `ExternalDownload` (see
+//    `externalDownload`), tracked by identity rather than by options — so
+//    one aborted call among several identical-options creators can't blank
+//    the others' progress by clearing a key they still share.
 //
-// Both sources seed `progress: null` until the browser reports a real
-// fraction — the aggregate coalesces `null` to `0` per-entry before taking
-// the min, so an unsignaled download still shows up as "in flight" instead
-// of vanishing from the aggregate.
+// A download with no browser progress yet still counts as "in flight" at
+// `0` instead of vanishing from the aggregate: stores report `progress:
+// null` until the first event and are coalesced here; external downloads
+// simply start at `0`.
 
 const downloadListeners = new Set<() => void>();
 
@@ -124,40 +124,62 @@ export function subscribeDownloads(listener: () => void): () => void {
   };
 }
 
-interface ExternalDownload {
+interface ExternalDownloadEntry {
   key: string;
-  progress: number | null;
+  progress: number;
 }
 
-let nextExternalToken = 0;
-const externalDownloads = new Map<number, ExternalDownload>();
+const externalDownloads = new Set<ExternalDownloadEntry>();
 
-/** Registers an in-flight imperative-creator download. Returns its token. @internal */
-export function beginExternalDownload(key: string): number {
-  const token = nextExternalToken;
-  nextExternalToken += 1;
-  // null, not 0: a number means the browser actually reported this fraction
-  // via downloadprogress.
-  externalDownloads.set(token, { key, progress: null });
-  notifyDownloads();
-  return token;
+/** One imperative-creator call's download, from registration to cleanup. @internal */
+export interface ExternalDownload {
+  /** Registers the download at `0`. */
+  start: () => void;
+  /** Records a `downloadprogress` fraction; ignored unless in flight. */
+  report: (progress: number) => void;
+  /** Unregisters the download; a no-op if it never started. */
+  end: () => void;
 }
 
-/** @internal */
-export function updateExternalDownload(token: number, progress: number): void {
-  const download = externalDownloads.get(token);
-  if (!download || download.progress === progress) {
-    return;
-  }
-  download.progress = progress;
-  notifyDownloads();
-}
-
-/** @internal */
-export function endExternalDownload(token: number): void {
-  if (externalDownloads.delete(token)) {
+/**
+ * Creates the handle for one imperative-creator download. Nothing is
+ * registered until `start()`, so a call that never downloads (model already
+ * available, or rejected at the user-activation gate) never shows up in the
+ * aggregate.
+ *
+ * `onProgress` hears exactly what the aggregate hears, right after it has
+ * been updated: `0` on `start()`, then each `report()` that changes the
+ * value — and nothing outside the `start()`..`end()` window.
+ *
+ * @internal
+ */
+export function externalDownload(
+  key: string,
+  onProgress?: (progress: number) => void,
+): ExternalDownload {
+  const entry: ExternalDownloadEntry = { key, progress: 0 };
+  const publish = () => {
     notifyDownloads();
-  }
+    onProgress?.(entry.progress);
+  };
+  return {
+    start: () => {
+      externalDownloads.add(entry);
+      publish();
+    },
+    report: (progress) => {
+      if (!externalDownloads.has(entry) || entry.progress === progress) {
+        return;
+      }
+      entry.progress = progress;
+      publish();
+    },
+    end: () => {
+      if (externalDownloads.delete(entry)) {
+        notifyDownloads();
+      }
+    },
+  };
 }
 
 function matchesAnyPrefix(key: string, prefixes: readonly string[]): boolean {
@@ -191,12 +213,11 @@ export function snapshotDownloadProgress(
     const progress = snapshot.progress ?? 0;
     min = min === null ? progress : Math.min(min, progress);
   }
-  for (const external of externalDownloads.values()) {
+  for (const external of externalDownloads) {
     if (!matchesAnyPrefix(external.key, prefixes)) {
       continue;
     }
-    const progress = external.progress ?? 0;
-    min = min === null ? progress : Math.min(min, progress);
+    min = min === null ? external.progress : Math.min(min, external.progress);
   }
   return min;
 }

@@ -5,11 +5,7 @@ import {
 } from "../../errors";
 import type { BuiltInAIName } from "../../is-supported";
 import { hasUserActivation } from "../user-activation";
-import {
-  beginExternalDownload,
-  endExternalDownload,
-  updateExternalDownload,
-} from "./registry";
+import { externalDownload } from "./registry";
 import { getNamespace, type AINamespace } from "./types";
 
 /** @internal */
@@ -93,19 +89,17 @@ export async function provisionInstance<
  * provision — the store handles its own probing separately (it already knows
  * `availability` by the time it needs an instance).
  *
- * Registers its download with the registry's external-download tracker
- * (keyed by a fresh token, not by options — see `registry.ts`) so
- * `useGlobalDownloadProgress` sees it alongside hook-driven downloads, and
- * clears it in `finally`. Registration happens in `provisionInstance`'s
- * `onDownloadStart`, i.e. only once its user-activation gate has passed — a
- * download that may not start is never reported.
+ * Its download is an `externalDownload` (see `registry.ts`), so
+ * `useGlobalDownloadProgress` sees it alongside hook-driven downloads. It is
+ * started from `provisionInstance`'s `onDownloadStart` — only once the
+ * user-activation gate has passed, so a download that may not start is never
+ * reported — and ended in `finally`.
  *
- * `onDownloadProgress` is the caller's own view of that same download: it
- * fires with `0` as soon as the download is registered — before `create()`,
- * so the caller hears about it while the registry still reports it — then
- * with each distinct `downloadprogress` fraction. It never fires when the
- * model is already available, when the activation gate rejects, nor once
- * the returned promise has settled.
+ * `onDownloadProgress` is the caller's own view of that same download: `0`
+ * when it starts, while the aggregate already reports it, then each distinct
+ * `downloadprogress` fraction. It never fires when the model is already
+ * available, when the activation gate rejects, nor once the returned promise
+ * has settled.
  *
  * @internal
  */
@@ -128,35 +122,17 @@ export async function provisionStandalone<
     throw new UnavailableError();
   }
 
-  // Cast so the closure assignment below isn't narrowed away in `finally`.
-  let token = null as number | null;
-  let lastReported = 0;
-  let settled = false;
+  const download = externalDownload(globalName, onDownloadProgress);
   try {
     return await provisionInstance<Options, Model>({
       namespace,
       options,
       availability,
       signal,
-      onDownloadStart: () => {
-        token = beginExternalDownload(globalName);
-        onDownloadProgress?.(0);
-      },
-      onProgress: (progress) => {
-        if (settled || token === null) {
-          return;
-        }
-        updateExternalDownload(token, progress);
-        if (progress !== lastReported) {
-          lastReported = progress;
-          onDownloadProgress?.(progress);
-        }
-      },
+      onDownloadStart: download.start,
+      onProgress: download.report,
     });
   } finally {
-    settled = true;
-    if (token !== null) {
-      endExternalDownload(token);
-    }
+    download.end();
   }
 }
