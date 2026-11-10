@@ -150,28 +150,30 @@ export function useLanguageModel(
     (instance) => instance.contextWindow,
   );
 
-  const [contextUsage, setContextUsage] = useState(0);
-  // A fresh session can already hold tokens — `initialPrompts` are prefilled
-  // by `create()` — so seed usage from the session the moment it becomes
-  // ready rather than waiting for the first turn to sync it. Adjusted during
-  // render (the same reset-on-change pattern `useLifecycle` uses for its key)
-  // so `status: "ready"` never commits alongside a stale `0`.
-  const [seededInstance, setSeededInstance] = useState<LanguageModel | null>(
-    null,
-  );
-  if (readyInstance !== seededInstance) {
-    setSeededInstance(readyInstance);
-    setContextUsage(readyInstance?.contextUsage ?? 0);
-  }
+  // Usage as of the last completed turn, tagged with the session it was read
+  // from. A fresh session can already hold tokens — `initialPrompts` are
+  // prefilled by `create()` — so until a turn has synced the current session,
+  // usage is read straight off it. Deriving (rather than seeding state) means
+  // `status: "ready"` never renders alongside a stale `0`, and a record left
+  // by a session reset() has discarded is ignored without any bookkeeping.
+  const [syncedUsage, setSyncedUsage] = useState<{
+    instance: LanguageModel;
+    value: number;
+  } | null>(null);
+  const contextUsage =
+    readyInstance === null
+      ? 0
+      : syncedUsage?.instance === readyInstance
+        ? syncedUsage.value
+        : readyInstance.contextUsage;
   const [overflowCount, setOverflowCount] = useState(0);
   // The session is hidden, so consumers can't attach the contextoverflow
   // listener themselves — the hook does, exactly once per instance (an owned
   // session is never prompted by anyone else, so no event can be missed). The
   // ref tracks the last instance a listener was wired to, and doubles as the
-  // currency guard for both writers below: reset() nulls it before zeroing
-  // the counters, so nothing the discarded session does afterwards — a
-  // finally from an aborted in-flight call, an already-queued overflow
-  // event — can write over the fresh session's zeros.
+  // currency guard for the overflow counter: reset() nulls it before zeroing
+  // the counter, so an already-queued overflow event from the discarded
+  // session can't bump the fresh session's zero.
   const listenedInstance = useRef<LanguageModel | null>(null);
 
   const [actions] = useState(() => {
@@ -190,15 +192,12 @@ export function useLanguageModel(
     }
     // Read live usage after every turn. Abort-safe: eviction isn't undone by
     // aborting, and aborted turns are removed from history, so the post-call
-    // read is accurate either way. Gated on the instance still being current:
-    // reset() zeroes the counters synchronously, but a discarded session's
-    // in-flight action still runs its finally after the store swap aborts
-    // it — unguarded, that would resurrect the dead session's usage over the
-    // fresh zero.
+    // read is accurate either way. Tagged with its instance: a discarded
+    // session's in-flight action still runs its finally after reset(), and
+    // the tag is what keeps that write from showing up as the fresh
+    // session's usage.
     function syncUsage(instance: LanguageModel): void {
-      if (listenedInstance.current === instance) {
-        setContextUsage(instance.contextUsage);
-      }
+      setSyncedUsage({ instance, value: instance.contextUsage });
     }
     return {
       async prompt(input: LanguageModelPrompt, opts?: PromptCallOptions) {
@@ -245,9 +244,9 @@ export function useLanguageModel(
       reset(nextOptions?: LanguageModelOptions) {
         // Nulling the ref both forgets the old instance (the next action
         // re-attaches the overflow listener to the fresh session) and arms
-        // the currency guards above against the old session's late writes.
+        // the currency guard above against the old session's late overflow
+        // events. Usage needs no reset: it is derived from the ready session.
         listenedInstance.current = null;
-        setContextUsage(0);
         setOverflowCount(0);
         replace(nextOptions);
       },
