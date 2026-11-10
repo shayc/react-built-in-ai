@@ -1,5 +1,14 @@
 # @shayc/react-built-in-ai
 
+## 0.12.1
+
+### Patch Changes
+
+- 62b9cdc: `useLanguageModel` now reports `contextUsage` as soon as the session is ready. A session created with `initialPrompts` (including one provisioned by `reset()`) previously read `0` until the first `prompt()` or `append()` call.
+- c160235: Task-hook actions and `prepare()` called before the hook's own mount effect has run — from a child component's effect or a layout effect — now wait for the lifecycle to start instead of rejecting with `AbortError: lifecycle reset`. A child effect that fires on an options change likewise reaches the new options' instance rather than the one being torn down.
+
+  Rendering `useLanguageModel` no longer calls `Promise.withResolvers`, so the hook renders without throwing on browsers that predate it.
+
 ## 0.12.0
 
 ### Minor Changes
