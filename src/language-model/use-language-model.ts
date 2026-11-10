@@ -162,16 +162,11 @@ export function useLanguageModel(
     () => readyInstance?.contextUsage ?? 0,
     [readyInstance],
   );
-  // Usage as of the last completed turn, tagged with the session it was read
-  // from so it can only ever be reported for that session.
-  const [syncedUsage, setSyncedUsage] = useState<{
-    instance: LanguageModel;
-    value: number;
-  } | null>(null);
-  const contextUsage =
-    syncedUsage !== null && syncedUsage.instance === readyInstance
-      ? syncedUsage.value
-      : usageAtReady;
+  // Usage as of the last completed turn on the current session, or `null`
+  // before its first one. It never outlives its session: reset() clears it,
+  // and syncUsage() drops writes from a session reset() has discarded.
+  const [syncedUsage, setSyncedUsage] = useState<number | null>(null);
+  const contextUsage = syncedUsage ?? usageAtReady;
   const [overflowCount, setOverflowCount] = useState(0);
   // The session is hidden, so consumers can't attach the contextoverflow
   // listener themselves — the hook does, exactly once per instance (an owned
@@ -204,7 +199,7 @@ export function useLanguageModel(
     // reset(), and must not replace the fresh session's record.
     function syncUsage(instance: LanguageModel): void {
       if (listenedInstance.current === instance) {
-        setSyncedUsage({ instance, value: instance.contextUsage });
+        setSyncedUsage(instance.contextUsage);
       }
     }
     return {
@@ -253,7 +248,6 @@ export function useLanguageModel(
         // Nulling the ref both forgets the old instance (the next action
         // re-attaches the overflow listener to the fresh session) and arms
         // the currency guards above against the old session's late writes.
-        // Dropping the usage record also releases the discarded session.
         listenedInstance.current = null;
         setSyncedUsage(null);
         setOverflowCount(0);
