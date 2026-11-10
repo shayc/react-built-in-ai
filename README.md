@@ -196,6 +196,7 @@ async function translate(
 - `onDownloadProgress(progress)` is called only when creating the instance involves a model download: once with `0` as soon as the download is known, then with each new fraction up to `1`. It is never called when the model is already available, when the creator rejects with `MissingUserActivationError` (no download starts), nor after the creator's promise settles — so the first call is the moment to flip your own "downloading" state.
 - They reject with `UnsupportedError`, `UnavailableError`, or `MissingUserActivationError`; other browser rejections such as `AbortError` and `NetworkError` pass through unchanged.
 - Call a creator from a user gesture when it may need to start a download. Joining a download already in flight does not require another gesture.
+- The gesture expires after a few seconds, and each creator checks for it when it is called. When several creators may each need a download, start them all before awaiting any of them (for example with `Promise.all`); one awaited after another's download will usually reject with `MissingUserActivationError`.
 
 ## Global download progress
 
