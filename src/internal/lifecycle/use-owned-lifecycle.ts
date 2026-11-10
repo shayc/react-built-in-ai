@@ -162,6 +162,7 @@ export function useOwnedLifecycle<
     progress: snapshot.progress,
     error: snapshot.error,
     inputQuota: snapshot.inputQuota,
+    instance: snapshot.instance,
     prepare: stable.prepare,
     acquire: stable.acquire,
     replace: stable.replace,
