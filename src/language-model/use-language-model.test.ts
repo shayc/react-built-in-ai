@@ -1,6 +1,6 @@
-import { useEffect } from "react";
+import { Activity, createElement, useEffect, useState } from "react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { renderHook } from "vitest-browser-react";
+import { render, renderHook } from "vitest-browser-react";
 import {
   __resetForTests,
   __sizeForTests,
@@ -235,6 +235,44 @@ describe("useLanguageModel", () => {
 
     await vi.waitFor(() => expect(instances).toHaveLength(2));
     await vi.waitFor(() => expect(result.current.contextUsage).toBe(7));
+  });
+
+  test("contextUsage follows the fresh session after an Activity hide/show", async () => {
+    // Hiding an <Activity> cleans up the retain effect, which destroys the
+    // session; revealing it provisions a new one. Hook state survives the
+    // round trip, so usage synced from the destroyed session must not be
+    // reported for its replacement — and reset() never runs on this path.
+    const { Fake, instances } = buildAIFake({
+      buildInstance: buildLanguageModelInstance,
+    });
+    vi.stubGlobal("LanguageModel", Fake);
+    let model!: ReturnType<typeof useLanguageModel>;
+    let setMode!: (mode: "visible" | "hidden") => void;
+    function Session() {
+      model = useLanguageModel();
+      return null;
+    }
+    function App() {
+      const [mode, set] = useState<"visible" | "hidden">("visible");
+      setMode = set;
+      // Activity's props type requires `children`, so they go in the props
+      // object rather than as createElement's third argument.
+      const props = { mode, children: createElement(Session) };
+      return createElement(Activity, props);
+    }
+
+    await render(createElement(App));
+    await vi.waitFor(() => expect(model.status).toBe("ready"));
+    await model.prompt("hi");
+    await vi.waitFor(() => expect(model.contextUsage).toBe(10));
+
+    setMode("hidden");
+    await vi.waitFor(() => expect(instances[0]!.destroy).toHaveBeenCalled());
+    setMode("visible");
+
+    await vi.waitFor(() => expect(instances).toHaveLength(2));
+    await vi.waitFor(() => expect(model.status).toBe("ready"));
+    expect(model.contextUsage).toBe(0);
   });
 
   test("contextUsage holds its ready value until a turn completes", async () => {
