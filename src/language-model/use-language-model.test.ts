@@ -199,8 +199,7 @@ describe("useLanguageModel", () => {
 
     const { result } = await renderHook(() => {
       const model = useLanguageModel(system("a long system prompt"));
-      // Recorded from an effect so only committed renders count — the
-      // render-phase seed discards the pass that first sees the instance.
+      // Recorded from an effect so only committed renders count.
       useEffect(() => {
         if (model.status === "ready") {
           seenAtReady.push(model.contextUsage);
@@ -216,7 +215,7 @@ describe("useLanguageModel", () => {
     expect(seenAtReady.every((usage) => usage === 123)).toBe(true);
   });
 
-  test("reset() re-seeds contextUsage from the replacement session", async () => {
+  test("reset() reports the replacement session's contextUsage once it is ready", async () => {
     let prefilled = 40;
     const { Fake, instances } = buildAIFake({
       buildInstance: () => ({
@@ -236,6 +235,87 @@ describe("useLanguageModel", () => {
 
     await vi.waitFor(() => expect(instances).toHaveLength(2));
     await vi.waitFor(() => expect(result.current.contextUsage).toBe(7));
+  });
+
+  test("contextUsage holds its ready value until a turn completes", async () => {
+    // The session's own counter can move mid-turn; the hook reports usage at
+    // ready and after each completed turn, never whatever a re-render samples.
+    let live = 5;
+    const { Fake } = buildAIFake({
+      buildInstance: () => ({
+        ...buildLanguageModelInstance(),
+        get contextUsage() {
+          return live;
+        },
+      }),
+    });
+    vi.stubGlobal("LanguageModel", Fake);
+
+    const { result, rerender } = await renderHook(() =>
+      useLanguageModel(system("first")),
+    );
+    await vi.waitFor(() => expect(result.current.contextUsage).toBe(5));
+
+    live = 50;
+    await rerender();
+    expect(result.current.contextUsage).toBe(5);
+
+    await result.current.prompt("hi");
+    await vi.waitFor(() => expect(result.current.contextUsage).toBe(50));
+  });
+
+  test("a discarded session's turn settling late doesn't touch the fresh session's usage", async () => {
+    // The first session's prompt ignores abort and settles only when told to,
+    // so its finally runs after the replacement has completed a turn.
+    const late = Promise.withResolvers<string>();
+    let built = 0;
+    const { Fake, instances } = buildAIFake({
+      buildInstance: () => {
+        const isFirst = built++ === 0;
+        let usage = isFirst ? 99 : 0;
+        return {
+          ...buildLanguageModelInstance(),
+          prompt: vi.fn(() => {
+            if (isFirst) {
+              return late.promise;
+            }
+            usage = 10;
+            return Promise.resolve("ok");
+          }),
+          get contextUsage() {
+            return usage;
+          },
+        };
+      },
+    });
+    vi.stubGlobal("LanguageModel", Fake);
+    let renders = 0;
+
+    const { result, act } = await renderHook(() => {
+      renders++;
+      return useLanguageModel();
+    });
+    await vi.waitFor(() => expect(result.current.contextUsage).toBe(99));
+
+    const inflight = result.current.prompt("slow").catch(() => undefined);
+    await vi.waitFor(() =>
+      expect(instances[0].prompt).toHaveBeenCalledTimes(1),
+    );
+
+    await act(() => result.current.reset());
+    await vi.waitFor(() => expect(instances).toHaveLength(2));
+    await result.current.prompt("hi");
+    await vi.waitFor(() => expect(result.current.contextUsage).toBe(10));
+
+    const rendersBefore = renders;
+    await act(async () => {
+      late.resolve("too late");
+      await inflight;
+    });
+
+    expect(result.current.contextUsage).toBe(10);
+    // Dropped by the currency guard, not merely masked: no state was written.
+    expect(renders).toBe(rendersBefore);
   });
 
   test("overflowCount increments once per fired contextoverflow, listener attached once", async () => {

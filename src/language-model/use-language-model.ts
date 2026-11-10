@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useOwnedLifecycle } from "../internal/lifecycle/use-owned-lifecycle";
 import { streamChunks } from "../internal/stream";
 import type { BaseHookReturn } from "../types";
@@ -150,28 +150,37 @@ export function useLanguageModel(
     (instance) => instance.contextWindow,
   );
 
-  const [contextUsage, setContextUsage] = useState(0);
+  // `contextUsage` changes at exactly two points: when a session becomes
+  // ready, and when a turn on it completes.
+  //
   // A fresh session can already hold tokens — `initialPrompts` are prefilled
-  // by `create()` — so seed usage from the session the moment it becomes
-  // ready rather than waiting for the first turn to sync it. Adjusted during
-  // render (the same reset-on-change pattern `useLifecycle` uses for its key)
-  // so `status: "ready"` never commits alongside a stale `0`.
-  const [seededInstance, setSeededInstance] = useState<LanguageModel | null>(
-    null,
+  // by `create()` — so its usage is sampled once, keyed on the instance, in
+  // the same render that first reports `status: "ready"`; the two never
+  // disagree. Sampled once rather than read on every render so the value
+  // can't drift mid-turn with unrelated re-renders.
+  const usageAtReady = useMemo(
+    () => readyInstance?.contextUsage ?? 0,
+    [readyInstance],
   );
-  if (readyInstance !== seededInstance) {
-    setSeededInstance(readyInstance);
-    setContextUsage(readyInstance?.contextUsage ?? 0);
-  }
+  // Usage as of the last completed turn, tagged with the session it was read
+  // from so it can only ever be reported for that session.
+  const [syncedUsage, setSyncedUsage] = useState<{
+    instance: LanguageModel;
+    value: number;
+  } | null>(null);
+  const contextUsage =
+    syncedUsage !== null && syncedUsage.instance === readyInstance
+      ? syncedUsage.value
+      : usageAtReady;
   const [overflowCount, setOverflowCount] = useState(0);
   // The session is hidden, so consumers can't attach the contextoverflow
   // listener themselves — the hook does, exactly once per instance (an owned
   // session is never prompted by anyone else, so no event can be missed). The
   // ref tracks the last instance a listener was wired to, and doubles as the
-  // currency guard for both writers below: reset() nulls it before zeroing
+  // currency guard for both writers below: reset() nulls it before clearing
   // the counters, so nothing the discarded session does afterwards — a
   // finally from an aborted in-flight call, an already-queued overflow
-  // event — can write over the fresh session's zeros.
+  // event — can write over the fresh session's state.
   const listenedInstance = useRef<LanguageModel | null>(null);
 
   const [actions] = useState(() => {
@@ -191,13 +200,11 @@ export function useLanguageModel(
     // Read live usage after every turn. Abort-safe: eviction isn't undone by
     // aborting, and aborted turns are removed from history, so the post-call
     // read is accurate either way. Gated on the instance still being current:
-    // reset() zeroes the counters synchronously, but a discarded session's
-    // in-flight action still runs its finally after the store swap aborts
-    // it — unguarded, that would resurrect the dead session's usage over the
-    // fresh zero.
+    // a discarded session's in-flight action still runs its finally after
+    // reset(), and must not replace the fresh session's record.
     function syncUsage(instance: LanguageModel): void {
       if (listenedInstance.current === instance) {
-        setContextUsage(instance.contextUsage);
+        setSyncedUsage({ instance, value: instance.contextUsage });
       }
     }
     return {
@@ -246,8 +253,9 @@ export function useLanguageModel(
         // Nulling the ref both forgets the old instance (the next action
         // re-attaches the overflow listener to the fresh session) and arms
         // the currency guards above against the old session's late writes.
+        // Dropping the usage record also releases the discarded session.
         listenedInstance.current = null;
-        setContextUsage(0);
+        setSyncedUsage(null);
         setOverflowCount(0);
         replace(nextOptions);
       },

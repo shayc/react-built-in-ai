@@ -209,7 +209,7 @@ async function translate(
 - Options are captured at mount. Use `reset(nextOptions)` or a `key` remount to change them.
 - The raw session is hidden. Use `createLanguageModel()` when you need `clone()` or direct lifecycle control.
 
-The hook also exposes `contextUsage`, `contextWindow`, and `overflowCount`. Prompt and append calls update usage; `reset()` discards the conversation and provisions a fresh session. When `overflowCount` increases, applications that must preserve older context can summarize their own transcript and call `reset({ ...options, initialPrompts })`. `reset(nextOptions)` replaces the full options object, so include every option the new session needs.
+The hook also exposes `contextUsage`, `contextWindow`, and `overflowCount`. Usage is reported as soon as the session is ready — including tokens prefilled by `initialPrompts` — and updates after each prompt and append call; `reset()` discards the conversation and provisions a fresh session. When `overflowCount` increases, applications that must preserve older context can summarize their own transcript and call `reset({ ...options, initialPrompts })`. `reset(nextOptions)` replaces the full options object, so include every option the new session needs.
 
 ## Errors and cancellation
 
