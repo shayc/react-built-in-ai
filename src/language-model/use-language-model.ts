@@ -162,11 +162,19 @@ export function useLanguageModel(
     () => readyInstance?.contextUsage ?? 0,
     [readyInstance],
   );
-  // Usage as of the last completed turn on the current session, or `null`
-  // before its first one. It never outlives its session: reset() clears it,
-  // and syncUsage() drops writes from a session reset() has discarded.
-  const [syncedUsage, setSyncedUsage] = useState<number | null>(null);
-  const contextUsage = syncedUsage ?? usageAtReady;
+  // Usage as of the last completed turn, tagged with the session it was read
+  // from so it is only ever reported for that session. The tag is not
+  // redundant with reset()'s clear: the session is also replaced, with this
+  // state preserved, whenever the retain effect is cleaned up and re-run
+  // (`<Activity>` hide/show, Fast Refresh) — a path reset() never sees.
+  const [syncedUsage, setSyncedUsage] = useState<{
+    instance: LanguageModel;
+    value: number;
+  } | null>(null);
+  const contextUsage =
+    syncedUsage !== null && syncedUsage.instance === readyInstance
+      ? syncedUsage.value
+      : usageAtReady;
   const [overflowCount, setOverflowCount] = useState(0);
   // The session is hidden, so consumers can't attach the contextoverflow
   // listener themselves — the hook does, exactly once per instance (an owned
@@ -199,7 +207,7 @@ export function useLanguageModel(
     // reset(), and must not replace the fresh session's record.
     function syncUsage(instance: LanguageModel): void {
       if (listenedInstance.current === instance) {
-        setSyncedUsage(instance.contextUsage);
+        setSyncedUsage({ instance, value: instance.contextUsage });
       }
     }
     return {
