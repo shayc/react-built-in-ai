@@ -83,11 +83,12 @@ export function useLifecycle<
 
   const [stable] = useState(() => ({
     // Both wait for the retain effect, then read `storeRef` — so they always
-    // dispatch to a started store. Once mounted, the wait is a single
-    // microtask, which still lands after the current effect flush: a child
-    // effect that fires on an options change reaches the new key's store
-    // rather than the one being released. Transient user activation survives
-    // the microtask, so the download gate is unaffected.
+    // dispatch to a started store. Once mounted, the wait still settles
+    // asynchronously — a few microtasks later, after the current synchronous
+    // effect flush: a child effect that fires on an options change reaches
+    // the new key's store rather than the one being released. Transient user
+    // activation is time-based and survives those microtasks, so the download
+    // gate is unaffected.
     prepare: async (): Promise<void> => {
       await mounted.wait();
       return storeRef.current.prepare();

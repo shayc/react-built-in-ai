@@ -14,8 +14,9 @@ export interface Gate {
   cancel(reason: unknown): void;
   /**
    * Resolves once the gate opens; rejects if it is cancelled or
-   * `callerSignal` aborts first. On an open gate this still yields one
-   * microtask, which lands after the effect flush the caller is running in.
+   * `callerSignal` aborts first. An open gate still settles asynchronously —
+   * a few microtasks later, which is after the synchronous effect flush the
+   * caller is running in.
    */
   wait(callerSignal?: AbortSignal): Promise<void>;
 }
