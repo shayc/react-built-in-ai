@@ -81,6 +81,12 @@ export async function provisionInstance<
  * `useGlobalDownloadProgress` sees it alongside hook-driven downloads, and
  * clears it in `finally`.
  *
+ * `onDownloadProgress` is the caller's own view of that same download: it
+ * fires with `0` as soon as the download is registered — before `create()`,
+ * so the caller hears about it while the registry still reports it — then
+ * with each distinct `downloadprogress` fraction. It never fires when the
+ * model is already available, nor once the returned promise has settled.
+ *
  * @internal
  */
 export async function provisionStandalone<
@@ -90,6 +96,7 @@ export async function provisionStandalone<
   globalName: BuiltInAIName,
   options: Options | undefined,
   signal?: AbortSignal,
+  onDownloadProgress?: (progress: number) => void,
 ): Promise<Model & AsyncDisposable> {
   const namespace = getNamespace<Options, Model>(globalName);
   if (!namespace) {
@@ -101,22 +108,38 @@ export async function provisionStandalone<
     throw new UnavailableError();
   }
 
-  const willDownload = availability !== "available";
-  const token = willDownload ? beginExternalDownload(globalName) : null;
+  if (availability === "available") {
+    return provisionInstance<Options, Model>({
+      namespace,
+      options,
+      availability,
+      signal,
+    });
+  }
+
+  const token = beginExternalDownload(globalName);
+  let lastReported = 0;
+  let settled = false;
   try {
+    onDownloadProgress?.(0);
     return await provisionInstance<Options, Model>({
       namespace,
       options,
       availability,
       signal,
-      onProgress:
-        token !== null
-          ? (progress) => updateExternalDownload(token, progress)
-          : undefined,
+      onProgress: (progress) => {
+        if (settled) {
+          return;
+        }
+        updateExternalDownload(token, progress);
+        if (progress !== lastReported) {
+          lastReported = progress;
+          onDownloadProgress?.(progress);
+        }
+      },
     });
   } finally {
-    if (token !== null) {
-      endExternalDownload(token);
-    }
+    settled = true;
+    endExternalDownload(token);
   }
 }
