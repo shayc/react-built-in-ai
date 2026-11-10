@@ -12,11 +12,17 @@ import { hasUserActivation } from "../user-activation";
 import { provisionInstance } from "./provision";
 import { getNamespace, type AINamespace } from "./types";
 
-interface Snapshot {
+interface Snapshot<Model> {
   status: Status;
   progress: number | null;
   error: BuiltInAIError | null;
   inputQuota: number;
+  /**
+   * The live instance while `status === "ready"`, else `null`. Internal: the
+   * public hooks never return it, but an owning hook can read state off the
+   * instance the moment it becomes ready (see `useLanguageModel`).
+   */
+  instance: Model | null;
 }
 
 export interface Acquired<Model> {
@@ -33,7 +39,7 @@ type InternalState<Model> =
   | { kind: "unavailable" }
   | { kind: "error"; error: BuiltInAIError };
 
-function toSnapshot<Model>(state: InternalState<Model>): Snapshot {
+function toSnapshot<Model>(state: InternalState<Model>): Snapshot<Model> {
   switch (state.kind) {
     case "downloading":
       return {
@@ -41,6 +47,7 @@ function toSnapshot<Model>(state: InternalState<Model>): Snapshot {
         progress: state.progress,
         error: null,
         inputQuota: 0,
+        instance: null,
       };
     case "ready":
       return {
@@ -48,6 +55,7 @@ function toSnapshot<Model>(state: InternalState<Model>): Snapshot {
         progress: null,
         error: null,
         inputQuota: state.inputQuota,
+        instance: state.instance,
       };
     case "error":
       return {
@@ -55,9 +63,16 @@ function toSnapshot<Model>(state: InternalState<Model>): Snapshot {
         progress: null,
         error: state.error,
         inputQuota: 0,
+        instance: null,
       };
     default:
-      return { status: state.kind, progress: null, error: null, inputQuota: 0 };
+      return {
+        status: state.kind,
+        progress: null,
+        error: null,
+        inputQuota: 0,
+        instance: null,
+      };
   }
 }
 
@@ -102,7 +117,7 @@ export function createStore<
     probe: Promise.resolve(),
   };
   let projectedFrom: InternalState<Model> = state;
-  let projection: Snapshot = toSnapshot(state);
+  let projection: Snapshot<Model> = toSnapshot(state);
 
   function notify(): void {
     for (const listener of listeners) {
@@ -117,7 +132,7 @@ export function createStore<
 
   // `useSyncExternalStore` requires a referentially stable snapshot between
   // changes; recompute the projection only when `state` identity changes.
-  function getSnapshot(): Snapshot {
+  function getSnapshot(): Snapshot<Model> {
     if (state !== projectedFrom) {
       projectedFrom = state;
       projection = toSnapshot(state);
