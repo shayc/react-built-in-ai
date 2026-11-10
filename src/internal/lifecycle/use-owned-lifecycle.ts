@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { BuiltInAIName } from "../../is-supported";
-import { abortError, mergeSignals, raceAbort } from "../signal";
+import { abortError } from "../signal";
+import { createGate, type Gate } from "./gate";
 import { release, retain, type Store } from "./registry";
 import { createStore } from "./store";
 
@@ -12,9 +13,11 @@ interface OwnedGeneration<
 > {
   key: string;
   store: Store<Options, Model>;
-  commit(): void;
-  cancelCommit(reason: unknown): void;
-  waitForCommit(callerSignal?: AbortSignal): Promise<void>;
+  /**
+   * Opened when the retain effect commits this generation; cancelled if it is
+   * superseded or the component unmounts first.
+   */
+  committed: Gate;
 }
 
 function createOwnedGeneration<
@@ -25,32 +28,10 @@ function createOwnedGeneration<
   options: Options | undefined,
   readQuota?: (instance: Model) => number,
 ): OwnedGeneration<Options, Model> {
-  const store = createStore<Options, Model>(globalName, options, readQuota);
-  const commitController = new AbortController();
-  const { promise: committed, resolve } = Promise.withResolvers<void>();
-  let isCommitted = false;
-
   return {
     key: `${globalName}:#${nextToken++}`,
-    store,
-    commit() {
-      if (isCommitted || commitController.signal.aborted) {
-        return;
-      }
-      isCommitted = true;
-      resolve();
-    },
-    cancelCommit(reason: unknown) {
-      if (!isCommitted) {
-        commitController.abort(reason);
-      }
-    },
-    waitForCommit(callerSignal?: AbortSignal) {
-      return raceAbort(
-        committed,
-        mergeSignals(commitController.signal, callerSignal),
-      );
-    },
+    store: createStore<Options, Model>(globalName, options, readQuota),
+    committed: createGate(),
   };
 }
 
@@ -100,7 +81,7 @@ export function useOwnedLifecycle<
   // without needing store teardown or registry cleanup.
   useEffect(
     () => () => {
-      pendingGenerationRef.current?.cancelCommit(
+      pendingGenerationRef.current?.committed.cancel(
         abortError("language model reset interrupted by unmount"),
       );
     },
@@ -112,7 +93,7 @@ export function useOwnedLifecycle<
     if (pendingGenerationRef.current === generation) {
       pendingGenerationRef.current = null;
     }
-    generation.commit();
+    generation.committed.open();
     return () => release(generation.key);
     // Each generation owns one immutable key/store pair, so the effect retains
     // and releases exactly once per committed reset.
@@ -123,12 +104,12 @@ export function useOwnedLifecycle<
   const [stable] = useState(() => ({
     prepare: async (): Promise<void> => {
       const selected = currentGenerationRef.current;
-      await selected.waitForCommit();
+      await selected.committed.wait();
       return selected.store.prepare();
     },
     acquire: async (callerSignal?: AbortSignal) => {
       const selected = currentGenerationRef.current;
-      await selected.waitForCommit(callerSignal);
+      await selected.committed.wait(callerSignal);
       return selected.store.acquire(callerSignal);
     },
     replace: (nextOptions?: Options): void => {
@@ -142,7 +123,7 @@ export function useOwnedLifecycle<
         readQuota,
       );
       // Cancel an uncommitted replacement, then route to the newest one.
-      currentGenerationRef.current.cancelCommit(
+      currentGenerationRef.current.committed.cancel(
         abortError("language model reset superseded by a newer reset"),
       );
       currentGenerationRef.current = replacement;

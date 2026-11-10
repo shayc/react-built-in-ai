@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { BuiltInAIName } from "../../is-supported";
-import { raceAbort } from "../signal";
+import { createGate } from "./gate";
 import { buildKey, lookup, release, retain, type Store } from "./registry";
 import { createStore } from "./store";
 
@@ -54,23 +54,15 @@ export function useLifecycle<
   // `store` until the `setStore(live)` re-render commits, letting an
   // in-between `prepare`/`acquire` call reach the never-started candidate.
   const storeRef = useRef(store);
-  // Resolved by the first retain effect. Until then the store is an unstarted
+  // Opened by the first retain effect. Until then the store is an unstarted
   // candidate, and a call that reaches it — from a child's mount effect or a
   // layout effect, both of which run before this hook's passive effect — would
-  // be aborted by the `start()` that follows. Hand-rolled rather than
-  // `Promise.withResolvers` so rendering a hook stays safe on browsers that
-  // predate it.
-  const [mounted] = useState(() => {
-    let resolve!: () => void;
-    const promise = new Promise<void>((r) => {
-      resolve = r;
-    });
-    return { promise, resolve };
-  });
+  // be aborted by the `start()` that follows.
+  const [mounted] = useState(createGate);
   useEffect(() => {
     const live = retain<Options, Model>(key, store);
     storeRef.current = live;
-    mounted.resolve();
+    mounted.open();
     if (live !== store) {
       // A sibling using the same options already won the retain race for
       // this key (see registry.ts's `retain`) — adopt its store instead of
@@ -91,19 +83,17 @@ export function useLifecycle<
 
   const [stable] = useState(() => ({
     // Both wait for the retain effect, then read `storeRef` — so they always
-    // dispatch to a started store. Once mounted, the await is a single
+    // dispatch to a started store. Once mounted, the wait is a single
     // microtask, which still lands after the current effect flush: a child
     // effect that fires on an options change reaches the new key's store
     // rather than the one being released. Transient user activation survives
     // the microtask, so the download gate is unaffected.
     prepare: async (): Promise<void> => {
-      await mounted.promise;
+      await mounted.wait();
       return storeRef.current.prepare();
     },
     acquire: async (callerSignal?: AbortSignal) => {
-      await (callerSignal
-        ? raceAbort(mounted.promise, callerSignal)
-        : mounted.promise);
+      await mounted.wait(callerSignal);
       return storeRef.current.acquire(callerSignal);
     },
   }));
