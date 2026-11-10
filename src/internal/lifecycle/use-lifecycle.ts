@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { BuiltInAIName } from "../../is-supported";
+import { createGate } from "./gate";
 import { buildKey, lookup, release, retain, type Store } from "./registry";
 import { createStore } from "./store";
 
@@ -53,9 +54,15 @@ export function useLifecycle<
   // `store` until the `setStore(live)` re-render commits, letting an
   // in-between `prepare`/`acquire` call reach the never-started candidate.
   const storeRef = useRef(store);
+  // Opened by the first retain effect. Until then the store is an unstarted
+  // candidate, and a call that reaches it — from a child's mount effect or a
+  // layout effect, both of which run before this hook's passive effect — would
+  // be aborted by the `start()` that follows.
+  const [mounted] = useState(createGate);
   useEffect(() => {
     const live = retain<Options, Model>(key, store);
     storeRef.current = live;
+    mounted.open();
     if (live !== store) {
       // A sibling using the same options already won the retain race for
       // this key (see registry.ts's `retain`) — adopt its store instead of
@@ -75,9 +82,21 @@ export function useLifecycle<
   }, [key]);
 
   const [stable] = useState(() => ({
-    prepare: (): Promise<void> => storeRef.current.prepare(),
-    acquire: (callerSignal?: AbortSignal) =>
-      storeRef.current.acquire(callerSignal),
+    // Both wait for the retain effect, then read `storeRef` — so they always
+    // dispatch to a started store. Once mounted, the wait still settles
+    // asynchronously — a few microtasks later, after the current synchronous
+    // effect flush: a child effect that fires on an options change reaches
+    // the new key's store rather than the one being released. Transient user
+    // activation is time-based and survives those microtasks, so the download
+    // gate is unaffected.
+    prepare: async (): Promise<void> => {
+      await mounted.wait();
+      return storeRef.current.prepare();
+    },
+    acquire: async (callerSignal?: AbortSignal) => {
+      await mounted.wait(callerSignal);
+      return storeRef.current.acquire(callerSignal);
+    },
   }));
 
   // getSnapshot doubles as the server snapshot: a store can't leave

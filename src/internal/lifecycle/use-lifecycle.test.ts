@@ -1,4 +1,4 @@
-import { createElement, StrictMode } from "react";
+import { createElement, StrictMode, useEffect, useLayoutEffect } from "react";
 import { renderToString } from "react-dom/server";
 import {
   afterEach,
@@ -1168,14 +1168,14 @@ describe("useLifecycle", () => {
 
       // No setUserActivation(true) — default from beforeEach is false, so
       // acquire() drives the gesture-less re-probe (→ "checking") instead of
-      // beginDownload(). Calling acquire() synchronously runs ensureReady() up to
-      // its first await, which lands inside that re-probe's
-      // availability() call — so by the time acquire() returns, the second
-      // call has already happened and can be aborted immediately.
+      // beginDownload(). acquire() yields one microtask (the mount gate)
+      // before ensureReady() runs up to its first await, which lands inside
+      // that re-probe's availability() call — wait for that second call so
+      // the abort below lands mid-probe.
       const controller = new AbortController();
       const reason = new DOMException("caller bailed", "AbortError");
       const pending = result.current.acquire(controller.signal);
-      expect(availability).toHaveBeenCalledTimes(2);
+      await vi.waitFor(() => expect(availability).toHaveBeenCalledTimes(2));
       controller.abort(reason);
 
       await expect(pending).rejects.toBe(reason);
@@ -1464,6 +1464,146 @@ describe("useLifecycle", () => {
       expect(hookA.result.current.status).toBe("ready");
       expect(hookB.result.current.status).toBe("ready");
       expect(create).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("calls made before the retain effect", () => {
+    // Child effects (and every layout effect) run before the hook's own
+    // passive effect retains and starts the store, so a call from one reaches
+    // the hook before its store is live.
+    type Lifecycle = ReturnType<typeof useLifecycle<TestOptions, TestInstance>>;
+
+    function stubAvailable(): Mock {
+      const create = vi.fn((options?: TestOptions) =>
+        Promise.resolve(buildInstance({ marker: options?.mode ?? "none" })),
+      );
+      vi.stubGlobal(NAMESPACE, {
+        availability: vi.fn(() => Promise.resolve("available")),
+        create,
+      });
+      return create;
+    }
+
+    function Caller({
+      lifecycle,
+      mode,
+      layout,
+      onResult,
+    }: {
+      lifecycle: Lifecycle;
+      mode: string;
+      layout?: boolean;
+      onResult: (result: string) => void;
+    }) {
+      const useChosenEffect = layout ? useLayoutEffect : useEffect;
+      useChosenEffect(() => {
+        lifecycle.acquire().then(
+          ({ instance }) => onResult(`ok:${instance.marker}`),
+          (error: Error) => onResult(`${error.name}:${error.message}`),
+        );
+        // Re-run only when the options change, like a real consumer effect.
+      }, [mode]);
+      return null;
+    }
+
+    function Parent(props: {
+      mode: string;
+      layout?: boolean;
+      onResult: (result: string) => void;
+    }) {
+      const lifecycle = useLifecycle<TestOptions, TestInstance>(NAMESPACE, {
+        mode: props.mode,
+      });
+      return createElement(Caller, { lifecycle, ...props });
+    }
+
+    test("an action called from a child's mount effect resolves", async () => {
+      stubAvailable();
+      const results: string[] = [];
+
+      await render(
+        createElement(Parent, { mode: "a", onResult: (r) => results.push(r) }),
+      );
+
+      await vi.waitFor(() => expect(results).toEqual(["ok:a"]));
+    });
+
+    test("an action called from a layout effect resolves", async () => {
+      stubAvailable();
+      const results: string[] = [];
+
+      await render(
+        createElement(Parent, {
+          mode: "a",
+          layout: true,
+          onResult: (r) => results.push(r),
+        }),
+      );
+
+      await vi.waitFor(() => expect(results).toEqual(["ok:a"]));
+    });
+
+    test("under StrictMode, both mount-effect calls resolve against the live store", async () => {
+      stubAvailable();
+      const results: string[] = [];
+
+      await render(
+        createElement(
+          StrictMode,
+          null,
+          createElement(Parent, {
+            mode: "a",
+            onResult: (r) => results.push(r),
+          }),
+        ),
+      );
+
+      await vi.waitFor(() => expect(results).toEqual(["ok:a", "ok:a"]));
+    });
+
+    test("a child effect firing on an options change reaches the new options' store", async () => {
+      stubAvailable();
+      const results: string[] = [];
+      const onResult = (r: string) => results.push(r);
+
+      const screen = await render(
+        createElement(Parent, { mode: "a", onResult }),
+      );
+      await vi.waitFor(() => expect(results).toEqual(["ok:a"]));
+
+      await screen.rerender(createElement(Parent, { mode: "b", onResult }));
+
+      await vi.waitFor(() => expect(results).toEqual(["ok:a", "ok:b"]));
+    });
+
+    test("a caller signal aborted before mount still rejects with its reason", async () => {
+      stubAvailable();
+      const reason = new DOMException("caller bailed", "AbortError");
+      let outcome: unknown;
+
+      function AbortingCaller({ lifecycle }: { lifecycle: Lifecycle }) {
+        useEffect(() => {
+          const controller = new AbortController();
+          const pending = lifecycle.acquire(controller.signal);
+          controller.abort(reason);
+          pending.catch((error: unknown) => {
+            outcome = error;
+          });
+          // oxlint-disable-next-line react/exhaustive-deps
+        }, []);
+        return null;
+      }
+      function AbortingParent() {
+        const lifecycle = useLifecycle<TestOptions, TestInstance>(
+          NAMESPACE,
+          undefined,
+        );
+        return createElement(AbortingCaller, { lifecycle });
+      }
+
+      await render(createElement(AbortingParent));
+
+      await vi.waitFor(() => expect(outcome).toBe(reason));
     });
   });
 });

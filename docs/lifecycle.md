@@ -35,6 +35,12 @@ Matching mounts observe the same `status`, `progress`, `error`, and browser inst
 
 `useLanguageModel` captures options at mount instead. Change its options with `reset(nextOptions)` or a keyed remount so a parent render cannot silently discard a conversation.
 
+## Calls made before mount
+
+A task hook starts its lifecycle in its own mount effect. React runs a child's effects, and every layout effect, before that, so a task method or `prepare()` called from one arrives early. The call waits for the lifecycle to start and then proceeds; it is not rejected. A per-call `signal` still cancels the wait.
+
+The same applies when options change: a child effect that fires on the change reaches the instance for the new options. The one exception is a layout effect that fires on an options change. It still reaches the outgoing instance and rejects with `AbortError` if that instance is torn down, so make such calls from a regular effect or an event handler.
+
 ## Shared retries and teardown
 
 From `error`, `prepare()` tears down the failed generation and starts the same options again. A retry from one component is therefore visible to every component using equal options, and it aborts sibling action calls and pending lifecycle waits with `AbortError`.
