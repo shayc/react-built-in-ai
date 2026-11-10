@@ -78,4 +78,27 @@ describe("createRewriter", () => {
     ).toBeTypeOf("function");
     await expect(rewriter.rewrite("draft")).resolves.toBe("R():draft");
   });
+
+  test("reports a download to onDownloadProgress without forwarding it to Rewriter.create()", async () => {
+    const { Fake, create } = buildAIFake({
+      status: "downloading",
+      buildInstance: buildRewriterInstance,
+    });
+    vi.stubGlobal("Rewriter", Fake);
+    const onDownloadProgress = vi.fn();
+    const controller = new AbortController();
+
+    await createRewriter({ signal: controller.signal, onDownloadProgress });
+
+    expect(onDownloadProgress.mock.calls).toEqual([[0]]);
+    const [createArg] = create.mock.calls[0] as unknown as [
+      Record<string, unknown>,
+    ];
+    expect(createArg).not.toHaveProperty("onDownloadProgress");
+    expect(createArg.signal).toBe(controller.signal);
+    const [availabilityArg] = Fake.availability.mock.calls[0] as unknown as [
+      Record<string, unknown>,
+    ];
+    expect(availabilityArg).not.toHaveProperty("onDownloadProgress");
+  });
 });

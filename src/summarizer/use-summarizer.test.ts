@@ -78,4 +78,27 @@ describe("createSummarizer", () => {
     ).toBeTypeOf("function");
     await expect(summarizer.summarize("text")).resolves.toBe("S():text");
   });
+
+  test("reports a download to onDownloadProgress without forwarding it to Summarizer.create()", async () => {
+    const { Fake, create } = buildAIFake({
+      status: "downloading",
+      buildInstance: buildSummarizerInstance,
+    });
+    vi.stubGlobal("Summarizer", Fake);
+    const onDownloadProgress = vi.fn();
+    const controller = new AbortController();
+
+    await createSummarizer({ signal: controller.signal, onDownloadProgress });
+
+    expect(onDownloadProgress.mock.calls).toEqual([[0]]);
+    const [createArg] = create.mock.calls[0] as unknown as [
+      Record<string, unknown>,
+    ];
+    expect(createArg).not.toHaveProperty("onDownloadProgress");
+    expect(createArg.signal).toBe(controller.signal);
+    const [availabilityArg] = Fake.availability.mock.calls[0] as unknown as [
+      Record<string, unknown>,
+    ];
+    expect(availabilityArg).not.toHaveProperty("onDownloadProgress");
+  });
 });
