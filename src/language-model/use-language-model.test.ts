@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { renderHook } from "vitest-browser-react";
 import {
@@ -182,6 +183,59 @@ describe("useLanguageModel", () => {
     await expect(result.current.measureContext("hi")).resolves.toBe(4);
     expect(instances[0].measureContextUsage).toHaveBeenCalledTimes(1);
     expect(result.current.contextUsage).toBe(0);
+  });
+
+  test("contextUsage reflects a pre-filled session as soon as it is ready", async () => {
+    // create() prefills initialPrompts, so a fresh session can already hold
+    // tokens before the first turn.
+    const { Fake } = buildAIFake({
+      buildInstance: () => ({
+        ...buildLanguageModelInstance(),
+        contextUsage: 123,
+      }),
+    });
+    vi.stubGlobal("LanguageModel", Fake);
+    const seenAtReady: number[] = [];
+
+    const { result } = await renderHook(() => {
+      const model = useLanguageModel(system("a long system prompt"));
+      // Recorded from an effect so only committed renders count — the
+      // render-phase seed discards the pass that first sees the instance.
+      useEffect(() => {
+        if (model.status === "ready") {
+          seenAtReady.push(model.contextUsage);
+        }
+      });
+      return model;
+    });
+
+    await vi.waitFor(() => expect(result.current.status).toBe("ready"));
+    expect(result.current.contextUsage).toBe(123);
+    // Never a committed render that pairs "ready" with a stale 0.
+    expect(seenAtReady.length).toBeGreaterThan(0);
+    expect(seenAtReady.every((usage) => usage === 123)).toBe(true);
+  });
+
+  test("reset() re-seeds contextUsage from the replacement session", async () => {
+    let prefilled = 40;
+    const { Fake, instances } = buildAIFake({
+      buildInstance: () => ({
+        ...buildLanguageModelInstance(),
+        contextUsage: prefilled,
+      }),
+    });
+    vi.stubGlobal("LanguageModel", Fake);
+
+    const { result, act } = await renderHook(() =>
+      useLanguageModel(system("first")),
+    );
+    await vi.waitFor(() => expect(result.current.contextUsage).toBe(40));
+
+    prefilled = 7;
+    await act(() => result.current.reset(system("compacted")));
+
+    await vi.waitFor(() => expect(instances).toHaveLength(2));
+    await vi.waitFor(() => expect(result.current.contextUsage).toBe(7));
   });
 
   test("overflowCount increments once per fired contextoverflow, listener attached once", async () => {
