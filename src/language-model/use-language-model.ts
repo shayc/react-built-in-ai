@@ -78,10 +78,7 @@ export interface LanguageModelHookReturn extends BaseHookReturn {
     input: LanguageModelPrompt,
     options?: PromptCallOptions,
   ): Promise<number>;
-  /**
-   * Current usage of the session's context window. `0` until ready; a session
-   * created with `initialPrompts` reports their usage as soon as it is ready.
-   */
+  /** Current usage of the session's context window. `0` until ready. */
   contextUsage: number;
   /** Context-window size of the current session. `0` until ready. */
   contextWindow: number;
@@ -135,34 +132,14 @@ export interface LanguageModelHookReturn extends BaseHookReturn {
 export function useLanguageModel(
   options?: LanguageModelOptions,
 ): LanguageModelHookReturn {
-  const {
-    status,
-    progress,
-    error,
-    prepare,
-    inputQuota,
-    instance: readyInstance,
-    acquire,
-    replace,
-  } = useOwnedLifecycle<LanguageModelOptions, LanguageModel>(
-    "LanguageModel",
-    options,
-    (instance) => instance.contextWindow,
-  );
+  const { status, progress, error, prepare, inputQuota, acquire, replace } =
+    useOwnedLifecycle<LanguageModelOptions, LanguageModel>(
+      "LanguageModel",
+      options,
+      (instance) => instance.contextWindow,
+    );
 
   const [contextUsage, setContextUsage] = useState(0);
-  // A fresh session can already hold tokens — `initialPrompts` are prefilled
-  // by `create()` — so seed usage from the session the moment it becomes
-  // ready rather than waiting for the first turn to sync it. Adjusted during
-  // render (the same reset-on-change pattern `useLifecycle` uses for its key)
-  // so `status: "ready"` never commits alongside a stale `0`.
-  const [seededInstance, setSeededInstance] = useState<LanguageModel | null>(
-    null,
-  );
-  if (readyInstance !== seededInstance) {
-    setSeededInstance(readyInstance);
-    setContextUsage(readyInstance?.contextUsage ?? 0);
-  }
   const [overflowCount, setOverflowCount] = useState(0);
   // The session is hidden, so consumers can't attach the contextoverflow
   // listener themselves — the hook does, exactly once per instance (an owned
