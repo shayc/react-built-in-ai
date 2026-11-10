@@ -464,6 +464,32 @@ describe("createLanguageModel", () => {
     ).toBeTypeOf("function");
   });
 
+  test("reports a download to onDownloadProgress without forwarding it to LanguageModel.create()", async () => {
+    const { Fake, create } = buildAIFake<LMInstance>({
+      status: "downloading",
+      buildInstance: buildLanguageModelInstance,
+    });
+    vi.stubGlobal("LanguageModel", Fake);
+    const onDownloadProgress = vi.fn();
+    const controller = new AbortController();
+
+    await createLanguageModel({
+      signal: controller.signal,
+      onDownloadProgress,
+    });
+
+    expect(onDownloadProgress.mock.calls).toEqual([[0]]);
+    const [createArg] = create.mock.calls[0] as unknown as [
+      Record<string, unknown>,
+    ];
+    expect(createArg).not.toHaveProperty("onDownloadProgress");
+    expect(createArg.signal).toBe(controller.signal);
+    const [availabilityArg] = Fake.availability.mock.calls[0] as unknown as [
+      Record<string, unknown>,
+    ];
+    expect(availabilityArg).not.toHaveProperty("onDownloadProgress");
+  });
+
   test("registers its download with the global aggregate", async () => {
     setUserActivation(true);
     let resolveCreate!: (value: LMInstance) => void;

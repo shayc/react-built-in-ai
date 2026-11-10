@@ -85,4 +85,36 @@ describe("createTranslator", () => {
     ).toBeTypeOf("function");
     await expect(translator.translate("hi")).resolves.toBe("T:hi");
   });
+
+  test("reports a download to onDownloadProgress without forwarding it to Translator.create()", async () => {
+    const { Fake, create } = buildAIFake({
+      status: "downloading",
+      buildInstance: buildTranslatorInstance,
+    });
+    vi.stubGlobal("Translator", Fake);
+    const onDownloadProgress = vi.fn();
+    const controller = new AbortController();
+
+    await createTranslator({
+      sourceLanguage: "en",
+      targetLanguage: "fr",
+      signal: controller.signal,
+      onDownloadProgress,
+    });
+
+    expect(onDownloadProgress.mock.calls).toEqual([[0]]);
+    const [createArg] = create.mock.calls[0] as unknown as [
+      Record<string, unknown>,
+    ];
+    expect(createArg).not.toHaveProperty("onDownloadProgress");
+    expect(createArg).toMatchObject({
+      sourceLanguage: "en",
+      targetLanguage: "fr",
+      signal: controller.signal,
+    });
+    const [availabilityArg] = Fake.availability.mock.calls[0] as unknown as [
+      Record<string, unknown>,
+    ];
+    expect(availabilityArg).not.toHaveProperty("onDownloadProgress");
+  });
 });

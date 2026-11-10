@@ -6,7 +6,7 @@ import {
 } from "../../errors";
 import type { BuiltInAIName } from "../../is-supported";
 import { provisionInstance, provisionStandalone } from "./provision";
-import { snapshotDownloadProgress } from "./registry";
+import { snapshotDownloadProgress, subscribeDownloads } from "./registry";
 import type { AINamespace } from "./types";
 
 interface TestOptions {
@@ -38,6 +38,12 @@ function setUserActivation(isActive: boolean): void {
     value: { isActive },
     configurable: true,
   });
+}
+
+function emitProgress(monitor: CreateMonitor, loaded: number): void {
+  monitor.dispatchEvent(
+    Object.assign(new Event("downloadprogress"), { loaded }),
+  );
 }
 
 afterEach(() => {
@@ -226,6 +232,37 @@ describe("provisionStandalone", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
+  test("rejects a downloadable model without a gesture before registering or reporting a download", async () => {
+    setUserActivation(false);
+    vi.stubGlobal(NAMESPACE, {
+      availability: vi.fn(() => Promise.resolve("downloadable")),
+      create: vi.fn(),
+    });
+    const aggregate: (number | null)[] = [];
+    const unsubscribe = subscribeDownloads(() => {
+      aggregate.push(snapshotDownloadProgress([NAMESPACE]));
+    });
+    const onDownloadProgress = vi.fn();
+
+    try {
+      await expect(
+        provisionStandalone<TestOptions, TestInstance>(
+          NAMESPACE,
+          { mode: "a" },
+          undefined,
+          onDownloadProgress,
+        ),
+      ).rejects.toBeInstanceOf(MissingUserActivationError);
+    } finally {
+      unsubscribe();
+    }
+
+    expect(onDownloadProgress).not.toHaveBeenCalled();
+    // No registry notification at all: the aggregate stayed null throughout.
+    expect(aggregate).toEqual([]);
+    expect(snapshotDownloadProgress([NAMESPACE])).toBeNull();
+  });
+
   test("joins an in-flight download without a gesture and tracks it as an external download", async () => {
     setUserActivation(false);
     let resolveCreate!: (value: TestInstance) => void;
@@ -251,6 +288,114 @@ describe("provisionStandalone", () => {
     const created = await pending;
 
     expect(created).toBeTruthy();
+    expect(snapshotDownloadProgress([NAMESPACE])).toBeNull();
+  });
+
+  test("reports a download to onDownloadProgress: 0 on registration, then each distinct fraction", async () => {
+    setUserActivation(true);
+    let monitor!: CreateMonitor;
+    let resolveCreate!: (value: TestInstance) => void;
+    vi.stubGlobal(NAMESPACE, {
+      availability: vi.fn(() => Promise.resolve("downloadable")),
+      create: vi.fn((opts?: { monitor?: CreateMonitorCallback }) => {
+        monitor = new EventTarget() as CreateMonitor;
+        opts?.monitor?.(monitor);
+        return new Promise<TestInstance>((resolve) => {
+          resolveCreate = resolve;
+        });
+      }),
+    });
+    // What the global aggregate reported at the moment of each call — the
+    // caller must hear about the download while it is still registered.
+    const registered: (number | null)[] = [];
+    const onDownloadProgress = vi.fn(() => {
+      registered.push(snapshotDownloadProgress([NAMESPACE]));
+    });
+
+    const pending = provisionStandalone<TestOptions, TestInstance>(
+      NAMESPACE,
+      { mode: "a" },
+      undefined,
+      onDownloadProgress,
+    );
+    await vi.waitFor(() => expect(onDownloadProgress).toHaveBeenCalledWith(0));
+
+    emitProgress(monitor, 0);
+    emitProgress(monitor, 0.5);
+    emitProgress(monitor, 0.5);
+    emitProgress(monitor, 1);
+
+    expect(onDownloadProgress.mock.calls).toEqual([[0], [0.5], [1]]);
+    expect(registered).toEqual([0, 0.5, 1]);
+
+    resolveCreate({ destroy: vi.fn() });
+    await pending;
+
+    emitProgress(monitor, 0.75);
+    expect(onDownloadProgress).toHaveBeenCalledTimes(3);
+    expect(snapshotDownloadProgress([NAMESPACE])).toBeNull();
+  });
+
+  test("reports a joined download to onDownloadProgress even when the browser emits no progress", async () => {
+    setUserActivation(false);
+    vi.stubGlobal(NAMESPACE, {
+      availability: vi.fn(() => Promise.resolve("downloading")),
+      create: vi.fn(() => Promise.resolve({ destroy: vi.fn() })),
+    });
+    const onDownloadProgress = vi.fn();
+
+    await provisionStandalone<TestOptions, TestInstance>(
+      NAMESPACE,
+      { mode: "a" },
+      undefined,
+      onDownloadProgress,
+    );
+
+    expect(onDownloadProgress.mock.calls).toEqual([[0]]);
+  });
+
+  test("does not call onDownloadProgress when the model is already available", async () => {
+    vi.stubGlobal(NAMESPACE, {
+      availability: vi.fn(() => Promise.resolve("available")),
+      create: vi.fn(() => Promise.resolve({ destroy: vi.fn() })),
+    });
+    const onDownloadProgress = vi.fn();
+
+    await provisionStandalone<TestOptions, TestInstance>(
+      NAMESPACE,
+      { mode: "a" },
+      undefined,
+      onDownloadProgress,
+    );
+
+    expect(onDownloadProgress).not.toHaveBeenCalled();
+  });
+
+  test("does not call onDownloadProgress after a failed download rejects", async () => {
+    setUserActivation(true);
+    let monitor!: CreateMonitor;
+    const failure = new Error("download failed");
+    vi.stubGlobal(NAMESPACE, {
+      availability: vi.fn(() => Promise.resolve("downloadable")),
+      create: vi.fn((opts?: { monitor?: CreateMonitorCallback }) => {
+        monitor = new EventTarget() as CreateMonitor;
+        opts?.monitor?.(monitor);
+        return Promise.reject(failure);
+      }),
+    });
+    const onDownloadProgress = vi.fn();
+
+    await expect(
+      provisionStandalone<TestOptions, TestInstance>(
+        NAMESPACE,
+        { mode: "a" },
+        undefined,
+        onDownloadProgress,
+      ),
+    ).rejects.toBe(failure);
+
+    emitProgress(monitor, 0.5);
+    expect(onDownloadProgress.mock.calls).toEqual([[0]]);
     expect(snapshotDownloadProgress([NAMESPACE])).toBeNull();
   });
 

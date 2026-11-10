@@ -51,4 +51,27 @@ describe("createProofreader", () => {
     const result = await proofreader.proofread("helo");
     expect(result.correctedInput).toBe("corrected(helo)");
   });
+
+  test("reports a download to onDownloadProgress without forwarding it to Proofreader.create()", async () => {
+    const { Fake, create } = buildAIFake({
+      status: "downloading",
+      buildInstance: buildProofreaderInstance,
+    });
+    vi.stubGlobal("Proofreader", Fake);
+    const onDownloadProgress = vi.fn();
+    const controller = new AbortController();
+
+    await createProofreader({ signal: controller.signal, onDownloadProgress });
+
+    expect(onDownloadProgress.mock.calls).toEqual([[0]]);
+    const [createArg] = create.mock.calls[0] as unknown as [
+      Record<string, unknown>,
+    ];
+    expect(createArg).not.toHaveProperty("onDownloadProgress");
+    expect(createArg.signal).toBe(controller.signal);
+    const [availabilityArg] = Fake.availability.mock.calls[0] as unknown as [
+      Record<string, unknown>,
+    ];
+    expect(availabilityArg).not.toHaveProperty("onDownloadProgress");
+  });
 });

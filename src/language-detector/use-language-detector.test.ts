@@ -80,4 +80,30 @@ describe("createLanguageDetector", () => {
     const [top] = await detector.detect("hello");
     expect(top?.detectedLanguage).toBe("en");
   });
+
+  test("reports a download to onDownloadProgress without forwarding it to LanguageDetector.create()", async () => {
+    const { Fake, create } = buildAIFake({
+      status: "downloading",
+      buildInstance: buildLanguageDetectorInstance,
+    });
+    vi.stubGlobal("LanguageDetector", Fake);
+    const onDownloadProgress = vi.fn();
+    const controller = new AbortController();
+
+    await createLanguageDetector({
+      signal: controller.signal,
+      onDownloadProgress,
+    });
+
+    expect(onDownloadProgress.mock.calls).toEqual([[0]]);
+    const [createArg] = create.mock.calls[0] as unknown as [
+      Record<string, unknown>,
+    ];
+    expect(createArg).not.toHaveProperty("onDownloadProgress");
+    expect(createArg.signal).toBe(controller.signal);
+    const [availabilityArg] = Fake.availability.mock.calls[0] as unknown as [
+      Record<string, unknown>,
+    ];
+    expect(availabilityArg).not.toHaveProperty("onDownloadProgress");
+  });
 });

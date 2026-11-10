@@ -76,4 +76,27 @@ describe("createWriter", () => {
     ).toBeTypeOf("function");
     await expect(writer.write("draft")).resolves.toBe("W():draft");
   });
+
+  test("reports a download to onDownloadProgress without forwarding it to Writer.create()", async () => {
+    const { Fake, create } = buildAIFake({
+      status: "downloading",
+      buildInstance: buildWriterInstance,
+    });
+    vi.stubGlobal("Writer", Fake);
+    const onDownloadProgress = vi.fn();
+    const controller = new AbortController();
+
+    await createWriter({ signal: controller.signal, onDownloadProgress });
+
+    expect(onDownloadProgress.mock.calls).toEqual([[0]]);
+    const [createArg] = create.mock.calls[0] as unknown as [
+      Record<string, unknown>,
+    ];
+    expect(createArg).not.toHaveProperty("onDownloadProgress");
+    expect(createArg.signal).toBe(controller.signal);
+    const [availabilityArg] = Fake.availability.mock.calls[0] as unknown as [
+      Record<string, unknown>,
+    ];
+    expect(availabilityArg).not.toHaveProperty("onDownloadProgress");
+  });
 });

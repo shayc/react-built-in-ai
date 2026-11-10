@@ -4,6 +4,15 @@ import type { TranslatorOptions } from "./use-translator";
 export interface CreateTranslatorOptions extends TranslatorOptions {
   /** Cancels both the (optional) download and `Translator.create()` call. */
   signal?: AbortSignal;
+  /**
+   * Called with the download fraction in `[0, 1]` when creating the instance
+   * involves a model download: once with `0` as soon as the download is
+   * known, then on each browser `downloadprogress` event that changes the
+   * value. Never called when the model is already available, when the call
+   * rejects with `MissingUserActivationError`, nor after the returned promise
+   * settles. Not forwarded to the browser's `create()`.
+   */
+  onDownloadProgress?: (progress: number) => void;
 }
 
 /**
@@ -33,10 +42,11 @@ export interface CreateTranslatorOptions extends TranslatorOptions {
 export async function createTranslator(
   options: CreateTranslatorOptions,
 ): Promise<Translator & AsyncDisposable> {
-  const { signal, ...createOptions } = options;
+  const { signal, onDownloadProgress, ...createOptions } = options;
   return provisionStandalone<typeof createOptions, Translator>(
     "Translator",
     createOptions,
     signal,
+    onDownloadProgress,
   );
 }

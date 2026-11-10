@@ -283,7 +283,7 @@ describe("useGlobalDownloadProgress", () => {
   });
 
   test("one of two identical-options creator downloads finishing does not blank the other's still-reported progress", async () => {
-    // Regression: external downloads are keyed by a unique token per call,
+    // Regression: external downloads are tracked per call (by identity),
     // not by options — so one call's cleanup can't clear a key the other
     // (sharing the same options) is still reporting against.
     const { result } = await renderHook(() =>
@@ -322,7 +322,7 @@ describe("useGlobalDownloadProgress", () => {
   test("cancelling one of two identical-options creator downloads via AbortSignal does not blank the other's still-reported progress", async () => {
     // Same regression as above, but exercising the abort path instead of the
     // happy path: cancelling the first call must still run provisionStandalone's
-    // `finally` cleanup (clearing only its own token), not leave a stale
+    // `finally` cleanup (ending only its own download), not leave a stale
     // entry behind or blank the second download's still-live progress.
     const { result } = await renderHook(() =>
       useGlobalDownloadProgress("LanguageDetector"),

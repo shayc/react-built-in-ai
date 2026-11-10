@@ -5,11 +5,7 @@ import {
 } from "../../errors";
 import type { BuiltInAIName } from "../../is-supported";
 import { hasUserActivation } from "../user-activation";
-import {
-  beginExternalDownload,
-  endExternalDownload,
-  updateExternalDownload,
-} from "./registry";
+import { externalDownload } from "./registry";
 import { getNamespace, type AINamespace } from "./types";
 
 /** @internal */
@@ -22,6 +18,13 @@ interface ProvisionInstanceOptions<
   /** `availability()` result the caller already probed. */
   availability: Availability;
   signal?: AbortSignal;
+  /**
+   * Called once, synchronously, when a download is involved (initiated or
+   * joined) — after the user-activation gate has passed and before
+   * `create()`. Never called when the gate rejects or the model is
+   * already available.
+   */
+  onDownloadStart?: () => void;
   /** Called on each `downloadprogress` event with `event.loaded` in `[0, 1]`. */
   onProgress?: (progress: number) => void;
 }
@@ -46,7 +49,14 @@ export async function provisionInstance<
 >(
   params: ProvisionInstanceOptions<Options, Model>,
 ): Promise<Model & AsyncDisposable> {
-  const { namespace, options, availability, signal, onProgress } = params;
+  const {
+    namespace,
+    options,
+    availability,
+    signal,
+    onDownloadStart,
+    onProgress,
+  } = params;
 
   const requiresActivation = availability === "downloadable";
   if (requiresActivation && !hasUserActivation()) {
@@ -54,6 +64,9 @@ export async function provisionInstance<
   }
 
   const willDownload = availability !== "available";
+  if (willDownload) {
+    onDownloadStart?.();
+  }
 
   const instance = await namespace.create({
     ...options!,
@@ -76,10 +89,17 @@ export async function provisionInstance<
  * provision — the store handles its own probing separately (it already knows
  * `availability` by the time it needs an instance).
  *
- * Registers its download with the registry's external-download tracker
- * (keyed by a fresh token, not by options — see `registry.ts`) so
- * `useGlobalDownloadProgress` sees it alongside hook-driven downloads, and
- * clears it in `finally`.
+ * Its download is an `externalDownload` (see `registry.ts`), so
+ * `useGlobalDownloadProgress` sees it alongside hook-driven downloads. It is
+ * started from `provisionInstance`'s `onDownloadStart` — only once the
+ * user-activation gate has passed, so a download that may not start is never
+ * reported — and ended in `finally`.
+ *
+ * `onDownloadProgress` is the caller's own view of that same download: `0`
+ * when it starts, while the aggregate already reports it, then each distinct
+ * `downloadprogress` fraction. It never fires when the model is already
+ * available, when the activation gate rejects, nor once the returned promise
+ * has settled.
  *
  * @internal
  */
@@ -90,6 +110,7 @@ export async function provisionStandalone<
   globalName: BuiltInAIName,
   options: Options | undefined,
   signal?: AbortSignal,
+  onDownloadProgress?: (progress: number) => void,
 ): Promise<Model & AsyncDisposable> {
   const namespace = getNamespace<Options, Model>(globalName);
   if (!namespace) {
@@ -101,22 +122,17 @@ export async function provisionStandalone<
     throw new UnavailableError();
   }
 
-  const willDownload = availability !== "available";
-  const token = willDownload ? beginExternalDownload(globalName) : null;
+  const download = externalDownload(globalName, onDownloadProgress);
   try {
     return await provisionInstance<Options, Model>({
       namespace,
       options,
       availability,
       signal,
-      onProgress:
-        token !== null
-          ? (progress) => updateExternalDownload(token, progress)
-          : undefined,
+      onDownloadStart: download.start,
+      onProgress: download.report,
     });
   } finally {
-    if (token !== null) {
-      endExternalDownload(token);
-    }
+    download.end();
   }
 }
